@@ -1,0 +1,24 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Workspace {
+  id           String        @id @default(cuid())
+  name         String
+  createdAt    DateTime      @default(now())
+  integrations Integration[]
+}
+
+model Integration {
+  id          String   @id @default(cuid())
+  workspaceId String
+  provider    String
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+}
