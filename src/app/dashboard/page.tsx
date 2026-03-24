@@ -15,9 +15,13 @@ async function getGitHubIntegration(): Promise<
     });
     return { integration, schemaReady: true };
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : "";
-    // Prisma P2010 (raw query) or P2021 (table does not exist)
-    if (message.includes("does not exist")) {
+    // Prisma P2021: "The table `public.X` does not exist in the current database."
+    const isPrismaTableMissing =
+      e != null &&
+      typeof e === "object" &&
+      "code" in e &&
+      (e as { code: string }).code === "P2021";
+    if (isPrismaTableMissing) {
       return { integration: null, schemaReady: false };
     }
     throw e;
