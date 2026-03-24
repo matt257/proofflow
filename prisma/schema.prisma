@@ -18,7 +18,12 @@ model Integration {
   id          String   @id @default(cuid())
   workspaceId String
   provider    String
+  accessToken String?
+  metadata    Json?
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@unique([workspaceId, provider])
 }
