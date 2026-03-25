@@ -4,6 +4,7 @@ import {
   analyzeOrgAccessReview,
   highestSeverity,
 } from "@/lib/access-analysis";
+import { mapSnapshotToControls, controlLabel } from "@/lib/controls";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import JSZip from "jszip";
@@ -120,6 +121,9 @@ async function generateExport() {
     },
   });
 
+  // Ensure compliance controls are mapped to the snapshot
+  await mapSnapshotToControls(snapshot.id);
+
   redirect("/exports");
 }
 
@@ -174,6 +178,7 @@ export default async function ExportsPage() {
                     <th className="px-4 py-3 font-medium">File</th>
                     <th className="px-4 py-3 font-medium">Snapshot</th>
                     <th className="px-4 py-3 font-medium">Summary</th>
+                    <th className="px-4 py-3 font-medium">Controls</th>
                     <th className="px-4 py-3 font-medium">Status</th>
                     <th className="px-4 py-3 font-medium" />
                   </tr>
@@ -205,6 +210,11 @@ export default async function ExportsPage() {
                               {String(meta.warningCount ?? 0)} warnings
                             </span>
                           )}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-foreground/50">
+                          {exp.type.includes("org_access_review")
+                            ? controlLabel()
+                            : "\u2014"}
                         </td>
                         <td className="px-4 py-3">
                           <span

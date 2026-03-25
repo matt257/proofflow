@@ -3,6 +3,7 @@ import {
   highestSeverity,
   type Finding,
 } from "@/lib/access-analysis";
+import { ORG_ACCESS_REVIEW_CONTROLS } from "@/lib/controls";
 import { toCsv } from "@/lib/csv";
 
 type SnapshotInput = {
@@ -101,6 +102,14 @@ function buildReadme(metrics: PackMetrics): string {
     "- `org-access-review.csv` — member list with roles, one row per user",
     "- `risk-summary.json` — structured risk analysis findings",
     "- `raw-snapshot.json` — full collected snapshot data",
+    "",
+    "### Compliance Mapping",
+    "",
+    "This evidence supports the following controls:",
+    "",
+    ...ORG_ACCESS_REVIEW_CONTROLS.map(
+      (c) => `- **${c.framework} ${c.code}** \u2014 ${c.name}`,
+    ),
     "",
     "### How to use",
     "",

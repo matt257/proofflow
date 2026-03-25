@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { fetchGitHubOrgAccessReview } from "@/lib/github-api";
+import { mapSnapshotToControls } from "@/lib/controls";
 
 export async function POST() {
   const integration = await db.integration.findFirst({
@@ -27,6 +28,8 @@ export async function POST() {
         data: JSON.parse(JSON.stringify(data)),
       },
     });
+
+    await mapSnapshotToControls(snapshot.id);
 
     return NextResponse.json({ snapshot });
   } catch (e) {

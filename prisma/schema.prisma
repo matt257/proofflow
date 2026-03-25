@@ -41,9 +41,33 @@ model EvidenceSnapshot {
   data          Json
   createdAt     DateTime @default(now())
 
-  workspace   Workspace   @relation(fields: [workspaceId], references: [id])
-  integration Integration @relation(fields: [integrationId], references: [id])
+  workspace   Workspace               @relation(fields: [workspaceId], references: [id])
+  integration Integration             @relation(fields: [integrationId], references: [id])
   exports     Export[]
+  controls    EvidenceControlMapping[]
+}
+
+model Control {
+  id          String                  @id @default(cuid())
+  framework   String
+  code        String
+  name        String
+  description String?
+  createdAt   DateTime                @default(now())
+  mappings    EvidenceControlMapping[]
+
+  @@unique([framework, code])
+}
+
+model EvidenceControlMapping {
+  id         String @id @default(cuid())
+  snapshotId String
+  controlId  String
+
+  snapshot EvidenceSnapshot @relation(fields: [snapshotId], references: [id])
+  control  Control          @relation(fields: [controlId], references: [id])
+
+  @@unique([snapshotId, controlId])
 }
 
 model Export {

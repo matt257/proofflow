@@ -9,6 +9,7 @@ import {
   type Finding,
   type Severity,
 } from "@/lib/access-analysis";
+import { mapSnapshotToControls, controlLabel } from "@/lib/controls";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
@@ -180,7 +181,7 @@ async function collectOrgEvidence() {
 
   try {
     const data = await fetchGitHubOrgAccessReview(integration.accessToken);
-    await db.evidenceSnapshot.create({
+    const snapshot = await db.evidenceSnapshot.create({
       data: {
         workspaceId: integration.workspaceId,
         integrationId: integration.id,
@@ -189,6 +190,7 @@ async function collectOrgEvidence() {
         data: JSON.parse(JSON.stringify(data)),
       },
     });
+    await mapSnapshotToControls(snapshot.id);
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";
     await db.evidenceSnapshot.create({
@@ -263,9 +265,14 @@ export default async function Dashboard() {
           {/* Org-wide access review */}
           <section className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">
-                Organization Access Review
-              </h2>
+              <div>
+                <h2 className="text-lg font-semibold">
+                  Organization Access Review
+                </h2>
+                <p className="text-xs text-foreground/40">
+                  Supports: {controlLabel()}
+                </p>
+              </div>
               <form action={collectOrgEvidence}>
                 <button
                   type="submit"
