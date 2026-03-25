@@ -6,6 +6,9 @@ export type ProofFlowAction = {
 
 export type ControlGuidance = {
   description: string;
+  purpose: string;
+  evidenceRequirement: string;
+  evidenceSource: string;
   actions: string[];
   proofflowAction: ProofFlowAction | null;
 };
@@ -13,6 +16,10 @@ export type ControlGuidance = {
 const GUIDANCE: Record<string, ControlGuidance> = {
   "CC6.1": {
     description: "Implement and verify logical access controls.",
+    purpose: "Proves that access to systems is restricted to authorized users.",
+    evidenceRequirement:
+      "A recent organization access review showing who has access and their privilege levels.",
+    evidenceSource: "GitHub organization access review",
     actions: [
       "Run a GitHub organization access review",
       "Verify that admin access is limited to authorized users",
@@ -25,6 +32,10 @@ const GUIDANCE: Record<string, ControlGuidance> = {
   },
   "CC6.2": {
     description: "Review user access regularly across all systems.",
+    purpose: "Proves that user access is reviewed regularly.",
+    evidenceRequirement:
+      "A recent user access review showing who has access and what roles they hold.",
+    evidenceSource: "GitHub organization access review",
     actions: [
       "Run a GitHub organization access review",
       "Review the member list and admin roles",
@@ -37,6 +48,10 @@ const GUIDANCE: Record<string, ControlGuidance> = {
   },
   "CC6.3": {
     description: "Verify role-based access is properly configured.",
+    purpose: "Proves that roles are assigned appropriately based on job function.",
+    evidenceRequirement:
+      "A recent access review confirming roles match job responsibilities and admin access is limited.",
+    evidenceSource: "GitHub organization access review",
     actions: [
       "Run a GitHub organization access review",
       "Confirm roles match job responsibilities",
@@ -49,6 +64,10 @@ const GUIDANCE: Record<string, ControlGuidance> = {
   },
   "CC7.1": {
     description: "Implement monitoring of system activity and access.",
+    purpose: "Proves that system activity is being monitored for anomalies.",
+    evidenceRequirement:
+      "Monitoring or audit log evidence showing system activity is being captured and reviewed.",
+    evidenceSource: "Audit logs",
     actions: [
       "Enable audit logging for your systems",
       "Collect and store logs regularly",
@@ -59,6 +78,10 @@ const GUIDANCE: Record<string, ControlGuidance> = {
   "CC8.1": {
     description:
       "Establish change management processes for infrastructure and code.",
+    purpose: "Proves that changes go through a controlled review and approval process.",
+    evidenceRequirement:
+      "Evidence of change management, such as pull request reviews, approvals, or documented change workflows.",
+    evidenceSource: "Pull request reviews",
     actions: [
       "Require pull request reviews for code changes",
       "Document change approval workflows",

@@ -12,7 +12,9 @@ import {
 import { mapSnapshotToControls, controlLabel } from "@/lib/controls";
 import {
   getControlCoverage,
+  getMaxAgeDays,
   type CoverageResult,
+  type ControlStatus,
 } from "@/lib/control-coverage";
 import {
   getControlGuidance,
@@ -574,153 +576,207 @@ function CoverageSection({ coverage }: { coverage: CoverageResult }) {
         </div>
       )}
 
-      {/* Control lists */}
-      <div className="grid gap-4 sm:grid-cols-2">
+      {/* Control cards */}
+      <div className="space-y-6">
         {/* Covered */}
         <div className="space-y-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-green-600">
-            Covered ({covered.length})
-          </h3>
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-green-600">
+              Covered ({covered.length})
+            </h3>
+            <p className="text-xs text-foreground/30">Evidence is current</p>
+          </div>
           {covered.length === 0 ? (
             <p className="text-sm text-foreground/40">None yet</p>
           ) : (
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {covered.map((c) => (
-                <div
-                  key={c.code}
-                  className="flex items-start gap-2 rounded border border-green-200 bg-green-50 px-3 py-2 dark:border-green-900/30 dark:bg-green-900/10"
-                >
-                  <span className="mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full bg-green-500" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">
-                      {c.framework} {c.code}
-                    </p>
-                    <p className="text-xs text-foreground/50">{c.name}</p>
-                    {c.ageDays != null && (
-                      <p className="text-xs text-foreground/30">
-                        {c.ageDays === 0 ? "Collected today" : `${c.ageDays}d ago`}
-                        {c.ageDays != null && c.ageDays <= 1 && (
-                          <span className="ml-1.5 text-green-600">· Auto-refreshed</span>
-                        )}
-                      </p>
-                    )}
-                  </div>
-                </div>
+                <CoveredCard key={c.code} control={c} />
               ))}
             </div>
           )}
         </div>
 
-        <div className="space-y-4">
-          {/* Stale */}
-          {stale.length > 0 && (
-            <div className="space-y-2">
+        {/* Stale */}
+        {stale.length > 0 && (
+          <div className="space-y-2">
+            <div>
               <h3 className="text-xs font-semibold uppercase tracking-wide text-yellow-600">
                 Stale ({stale.length})
               </h3>
-              <div className="space-y-1.5">
-                {stale.map((c) => {
-                  const guidance = getControlGuidance(c.code);
-                  return (
-                    <div
-                      key={c.code}
-                      className="rounded border border-yellow-300 bg-yellow-50 px-3 py-2 dark:border-yellow-900/30 dark:bg-yellow-900/10"
-                    >
-                      <div className="flex items-start gap-2">
-                        <span className="mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full bg-yellow-500" />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium">
-                            {c.framework} {c.code}
-                          </p>
-                          <p className="text-xs text-foreground/50">{c.name}</p>
-                          <p className="text-xs text-yellow-600 dark:text-yellow-400">
-                            Last collected {c.ageDays}d ago &mdash; evidence is out of date
-                          </p>
-                        </div>
-                      </div>
-                      {guidance?.proofflowAction && (
-                        <form
-                          action={guidance.proofflowAction.route}
-                          method="POST"
-                          className="mt-2 ml-4"
-                        >
-                          <button
-                            type="submit"
-                            className="rounded bg-yellow-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-yellow-700"
-                          >
-                            Re-run {guidance.proofflowAction.label.toLowerCase()}
-                          </button>
-                        </form>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+              <p className="text-xs text-foreground/30">Evidence exists but is out of date</p>
             </div>
-          )}
-
-          {/* Missing */}
-          <div className="space-y-2">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-red-500">
-              Missing ({missing.length})
-            </h3>
-            {missing.length === 0 && stale.length === 0 ? (
-              <p className="text-sm text-green-600">All controls covered</p>
-            ) : missing.length === 0 ? null : (
-              <div className="space-y-1.5">
-                {missing.map((c) => {
-                  const guidance = getControlGuidance(c.code);
-                  return (
-                    <div
-                      key={c.code}
-                      className="rounded border border-red-200 bg-red-50 px-3 py-2 dark:border-red-900/30 dark:bg-red-900/10"
-                    >
-                      <div className="flex items-start gap-2">
-                        <span className="mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full bg-red-400" />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium">
-                            {c.framework} {c.code}
-                          </p>
-                          <p className="text-xs text-foreground/50">
-                            {c.name}
-                          </p>
-                        </div>
-                      </div>
-                      {guidance && (
-                        <div className="mt-2 ml-4 space-y-1.5">
-                          <p className="text-xs font-medium text-foreground/40">
-                            Next steps:
-                          </p>
-                          <ul className="list-disc pl-4 text-xs text-foreground/50 space-y-0.5">
-                            {guidance.actions.map((a, i) => (
-                              <li key={i}>{a}</li>
-                            ))}
-                          </ul>
-                          {guidance.proofflowAction && (
-                            <form
-                              action={guidance.proofflowAction.route}
-                              method="POST"
-                              className="pt-1"
-                            >
-                              <button
-                                type="submit"
-                                className="rounded bg-foreground px-3 py-1 text-xs font-medium text-background transition-colors hover:bg-foreground/90"
-                              >
-                                {guidance.proofflowAction.label}
-                              </button>
-                            </form>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            <div className="space-y-2">
+              {stale.map((c) => (
+                <StaleCard key={c.code} control={c} />
+              ))}
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Missing */}
+        {missing.length > 0 ? (
+          <div className="space-y-2">
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-red-500">
+                Missing ({missing.length})
+              </h3>
+              <p className="text-xs text-foreground/30">No evidence collected yet</p>
+            </div>
+            <div className="space-y-2">
+              {missing.map((c) => (
+                <MissingCard key={c.code} control={c} />
+              ))}
+            </div>
+          </div>
+        ) : stale.length === 0 ? (
+          <p className="text-sm text-green-600">All controls covered</p>
+        ) : null}
       </div>
     </section>
+  );
+}
+
+function CoveredCard({ control: c }: { control: ControlStatus }) {
+  const guidance = getControlGuidance(c.code);
+  const autoRefreshed = c.ageDays != null && c.ageDays <= 1;
+  return (
+    <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 dark:border-green-900/30 dark:bg-green-900/10">
+      <div className="flex items-start gap-2">
+        <span className="mt-1 inline-block h-2 w-2 shrink-0 rounded-full bg-green-500" />
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <div>
+            <p className="text-sm font-medium">{c.framework} {c.code}</p>
+            <p className="text-xs text-foreground/50">{c.name}</p>
+          </div>
+          {guidance && (
+            <p className="text-xs italic text-foreground/40">{guidance.purpose}</p>
+          )}
+          <p className="text-xs text-green-700 dark:text-green-400">
+            Covered — recent {guidance?.evidenceSource ?? "evidence"} was collected
+            {c.lastCollectedAt && (
+              <> on {c.lastCollectedAt.toLocaleDateString()}</>
+            )}
+            .
+          </p>
+          {guidance && (
+            <p className="text-xs text-foreground/30">
+              Evidence: {guidance.evidenceSource}
+            </p>
+          )}
+          {autoRefreshed && (
+            <p className="text-xs font-medium text-green-600">
+              Automatically refreshed by schedule
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StaleCard({ control: c }: { control: ControlStatus }) {
+  const guidance = getControlGuidance(c.code);
+  const maxAge = getMaxAgeDays(c.code);
+  return (
+    <div className="rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-3 dark:border-yellow-900/30 dark:bg-yellow-900/10">
+      <div className="flex items-start gap-2">
+        <span className="mt-1 inline-block h-2 w-2 shrink-0 rounded-full bg-yellow-500" />
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <div>
+            <p className="text-sm font-medium">{c.framework} {c.code}</p>
+            <p className="text-xs text-foreground/50">{c.name}</p>
+          </div>
+          {guidance && (
+            <p className="text-xs italic text-foreground/40">{guidance.purpose}</p>
+          )}
+          <p className="text-xs text-yellow-700 dark:text-yellow-400">
+            Evidence exists but is older than the freshness requirement.
+            Last collected {c.ageDays}d ago (required every {maxAge} days).
+          </p>
+          {guidance && (
+            <div className="space-y-1.5 pt-1">
+              <p className="text-xs font-semibold text-foreground/50">
+                What would fix this?
+              </p>
+              <ul className="list-disc pl-4 text-xs text-foreground/50 space-y-0.5">
+                {guidance.actions.map((a, i) => (
+                  <li key={i}>{a}</li>
+                ))}
+              </ul>
+              {guidance.proofflowAction && (
+                <form
+                  action={guidance.proofflowAction.route}
+                  method="POST"
+                  className="pt-0.5"
+                >
+                  <button
+                    type="submit"
+                    className="rounded bg-yellow-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-yellow-700"
+                  >
+                    Re-run {guidance.proofflowAction.label.toLowerCase()}
+                  </button>
+                </form>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MissingCard({ control: c }: { control: ControlStatus }) {
+  const guidance = getControlGuidance(c.code);
+  return (
+    <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/30 dark:bg-red-900/10">
+      <div className="flex items-start gap-2">
+        <span className="mt-1 inline-block h-2 w-2 shrink-0 rounded-full bg-red-400" />
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <div>
+            <p className="text-sm font-medium">{c.framework} {c.code}</p>
+            <p className="text-xs text-foreground/50">{c.name}</p>
+          </div>
+          {guidance && (
+            <p className="text-xs italic text-foreground/40">{guidance.purpose}</p>
+          )}
+          <p className="text-xs text-red-600 dark:text-red-400">
+            No evidence has been collected for this control yet.
+          </p>
+          {guidance && (
+            <>
+              <p className="text-xs text-foreground/40">
+                Needs: {guidance.evidenceRequirement}
+              </p>
+              <div className="space-y-1.5 pt-1">
+                <p className="text-xs font-semibold text-foreground/50">
+                  What would fix this?
+                </p>
+                <ul className="list-disc pl-4 text-xs text-foreground/50 space-y-0.5">
+                  {guidance.actions.map((a, i) => (
+                    <li key={i}>{a}</li>
+                  ))}
+                </ul>
+                {guidance.proofflowAction && (
+                  <form
+                    action={guidance.proofflowAction.route}
+                    method="POST"
+                    className="pt-0.5"
+                  >
+                    <button
+                      type="submit"
+                      className="rounded bg-foreground px-3 py-1 text-xs font-medium text-background transition-colors hover:bg-foreground/90"
+                    >
+                      {guidance.proofflowAction.label}
+                    </button>
+                  </form>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 

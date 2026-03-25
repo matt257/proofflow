@@ -13,7 +13,7 @@ const FRESHNESS_DAYS: Record<string, number> = {
   "CC8.1": 90,
 };
 
-function getMaxAgeDays(code: string): number {
+export function getMaxAgeDays(code: string): number {
   return FRESHNESS_DAYS[code] ?? 30;
 }
 
