@@ -213,24 +213,29 @@ async function collectOrgEvidence() {
 async function enableSchedule() {
   "use server";
 
-  let workspace = await db.workspace.findFirst();
-  if (!workspace) {
-    workspace = await db.workspace.create({
-      data: { name: "Default Workspace" },
-    });
-  }
+  try {
+    let workspace = await db.workspace.findFirst();
+    if (!workspace) {
+      workspace = await db.workspace.create({
+        data: { name: "Default Workspace" },
+      });
+    }
 
-  const type = "github_org_access_review";
-  await db.schedule.upsert({
-    where: { workspaceId_type: { workspaceId: workspace.id, type } },
-    create: {
-      workspaceId: workspace.id,
-      type,
-      frequency: "monthly",
-      nextRunAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-    },
-    update: {},
-  });
+    const type = "github_org_access_review";
+    await db.schedule.upsert({
+      where: { workspaceId_type: { workspaceId: workspace.id, type } },
+      create: {
+        workspaceId: workspace.id,
+        type,
+        frequency: "monthly",
+        nextRunAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      },
+      update: {},
+    });
+  } catch (e) {
+    console.error("enableSchedule failed:", e);
+    redirect("/dashboard");
+  }
 
   redirect("/dashboard");
 }
