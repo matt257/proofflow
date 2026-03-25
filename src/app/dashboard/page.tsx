@@ -140,6 +140,17 @@ async function getDashboardData() {
       // best-effort
     }
 
+    let notificationEmail: string | null = null;
+    try {
+      const pref = await db.notificationPreference.findFirst({
+        where: { enabled: true },
+        select: { email: true },
+      });
+      notificationEmail = pref?.email ?? null;
+    } catch {
+      // best-effort
+    }
+
     return {
       schemaReady: true as const,
       integration,
@@ -148,6 +159,7 @@ async function getDashboardData() {
       history,
       coverage,
       schedule,
+      notificationEmail,
     };
   } catch (e: unknown) {
     if (isPrismaTableMissing(e)) {
@@ -159,6 +171,7 @@ async function getDashboardData() {
         history: [],
         coverage: null,
         schedule: null,
+        notificationEmail: null,
       };
     }
     throw e;
@@ -246,6 +259,34 @@ async function enableSchedule() {
   redirect("/dashboard");
 }
 
+async function enableNotifications(formData: FormData) {
+  "use server";
+
+  const email = (formData.get("email") as string)?.trim();
+  if (!email || !email.includes("@")) {
+    redirect("/dashboard");
+  }
+
+  try {
+    let workspace = await db.workspace.findFirst();
+    if (!workspace) {
+      workspace = await db.workspace.create({
+        data: { name: "Default Workspace" },
+      });
+    }
+
+    await db.notificationPreference.upsert({
+      where: { workspaceId_email: { workspaceId: workspace.id, email } },
+      create: { workspaceId: workspace.id, email },
+      update: { enabled: true },
+    });
+  } catch (e) {
+    console.error("enableNotifications failed:", e);
+  }
+
+  redirect("/dashboard");
+}
+
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
@@ -259,6 +300,7 @@ export default async function Dashboard() {
     history,
     coverage,
     schedule,
+    notificationEmail,
   } = await getDashboardData();
   const meta = integration?.metadata as Record<string, string> | null;
 
@@ -405,6 +447,40 @@ export default async function Dashboard() {
               </div>
             </section>
           )}
+
+          {/* Notifications */}
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold text-foreground/60">
+              Notifications
+            </h3>
+            {notificationEmail ? (
+              <div className="flex items-center gap-2 rounded-lg border border-foreground/10 px-4 py-3 text-sm">
+                <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
+                <span className="text-foreground/60">
+                  Alerts enabled for: <span className="font-medium">{notificationEmail}</span>
+                </span>
+              </div>
+            ) : (
+              <form action={enableNotifications} className="flex gap-2">
+                <input
+                  type="email"
+                  name="email"
+                  placeholder="you@company.com"
+                  required
+                  className="flex-1 rounded-lg border border-foreground/20 bg-transparent px-3 py-2 text-sm placeholder:text-foreground/30 focus:border-foreground/40 focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:bg-foreground/90"
+                >
+                  Enable alerts
+                </button>
+              </form>
+            )}
+            <p className="text-xs text-foreground/30">
+              Receive email alerts when controls become stale or evidence is auto-refreshed.
+            </p>
+          </section>
         </>
       )}
     </main>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runDueSchedules, remediateStaleControls } from "@/lib/scheduler";
+import { sendComplianceNotifications } from "@/lib/notify";
 
 export const dynamic = "force-dynamic";
 
@@ -36,9 +37,15 @@ export async function GET(request: NextRequest) {
     console.log("[cron] No stale controls need remediation");
   }
 
+  // 3. Send notifications
+  console.log("[cron] Sending notifications…");
+  const notified = await sendComplianceNotifications(remediation);
+  console.log(`[cron] Notifications sent: ${notified}`);
+
   return NextResponse.json({
     ran: results.length,
     results,
     remediation,
+    notified,
   });
 }
