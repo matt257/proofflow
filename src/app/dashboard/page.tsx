@@ -312,6 +312,18 @@ function EvidenceCard({ snapshot }: { snapshot: NonNullable<Snapshot> }) {
         <FailedEvidence data={data} />
       )}
 
+      {/* Actions */}
+      {snapshot.status === "succeeded" && (
+        <div className="flex gap-3">
+          <a
+            href="/api/evidence/github-access-review/export"
+            className="rounded-lg border border-foreground/10 px-4 py-2 text-sm font-medium transition-colors hover:bg-foreground/5"
+          >
+            Download CSV
+          </a>
+        </div>
+      )}
+
       {/* Raw JSON toggle */}
       <details className="group">
         <summary className="cursor-pointer text-xs text-foreground/40 hover:text-foreground/60">
