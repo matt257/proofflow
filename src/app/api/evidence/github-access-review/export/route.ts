@@ -17,12 +17,6 @@ export async function GET() {
   }
 
   const data = (snapshot.data ?? {}) as Record<string, unknown>;
-  const user = (data.user ?? {}) as Record<string, unknown>;
-  const orgs = Array.isArray(data.orgs)
-    ? (data.orgs as Record<string, unknown>[])
-    : [];
-
-  const collectedAt = snapshot.collectedAt.toISOString();
   const s = (v: unknown) => (v != null ? String(v) : "");
 
   const headers = [
@@ -31,32 +25,99 @@ export async function GET() {
     "github_user_name",
     "github_user_id",
     "github_user_email",
+    "github_user_type",
     "org_login",
     "org_id",
     "org_description",
     "org_url",
+    "org_role",
+    "org_membership_state",
+    "team_name",
+    "team_slug",
+    "team_id",
+    "team_privacy",
+    "parent_team",
   ];
 
+  const collectedAt = snapshot.collectedAt.toISOString();
+  const user = (data.user ?? {}) as Record<string, unknown>;
   const userFields = [
     collectedAt,
     s(user.login),
     s(user.name),
     s(user.id),
     s(user.email),
+    s(user.type),
   ];
 
-  let rows: string[][];
-  if (orgs.length === 0) {
-    // Single row with blank org fields
-    rows = [[...userFields, "", "", "", ""]];
+  const rows: string[][] = [];
+
+  // v2 format: orgs is an array of { org, membership, teams }
+  // v1 format: orgs is a flat array of org objects
+  const rawOrgs = Array.isArray(data.orgs) ? data.orgs : [];
+  const isV2 =
+    rawOrgs.length > 0 &&
+    typeof rawOrgs[0] === "object" &&
+    rawOrgs[0] !== null &&
+    "org" in (rawOrgs[0] as Record<string, unknown>);
+
+  if (isV2) {
+    for (const entry of rawOrgs as Record<string, unknown>[]) {
+      const org = (entry.org ?? {}) as Record<string, unknown>;
+      const membership = (entry.membership ?? {}) as Record<string, unknown>;
+      const teams = Array.isArray(entry.teams)
+        ? (entry.teams as Record<string, unknown>[])
+        : [];
+
+      const orgFields = [
+        s(org.login),
+        s(org.id),
+        s(org.description),
+        org.login ? `https://github.com/${String(org.login)}` : "",
+        s(membership.role),
+        s(membership.state),
+      ];
+
+      if (teams.length === 0) {
+        rows.push([...userFields, ...orgFields, "", "", "", "", ""]);
+      } else {
+        for (const team of teams) {
+          const parent = team.parent as Record<string, unknown> | null;
+          rows.push([
+            ...userFields,
+            ...orgFields,
+            s(team.name),
+            s(team.slug),
+            s(team.id),
+            s(team.privacy),
+            parent ? s(parent.slug) : "",
+          ]);
+        }
+      }
+    }
   } else {
-    rows = orgs.map((org) => [
-      ...userFields,
-      s(org.login),
-      s(org.id),
-      s(org.description),
-      org.login ? `https://github.com/${String(org.login)}` : "",
-    ]);
+    // v1 fallback: flat org objects, no teams
+    for (const org of rawOrgs as Record<string, unknown>[]) {
+      rows.push([
+        ...userFields,
+        s(org.login),
+        s(org.id),
+        s(org.description),
+        org.login ? `https://github.com/${String(org.login)}` : "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+      ]);
+    }
+  }
+
+  // If no orgs at all, still emit one row with the user
+  if (rows.length === 0) {
+    rows.push([...userFields, "", "", "", "", "", "", "", "", "", "", ""]);
   }
 
   const csv = toCsv(headers, rows);

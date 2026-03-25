@@ -113,16 +113,14 @@ async function collectEvidence() {
   }
 
   try {
-    const { user, orgs } = await fetchGitHubAccessReview(
-      integration.accessToken,
-    );
+    const data = await fetchGitHubAccessReview(integration.accessToken);
     await db.evidenceSnapshot.create({
       data: {
         workspaceId: integration.workspaceId,
         integrationId: integration.id,
         type: "github_access_review",
         status: "succeeded",
-        data: { user, orgs },
+        data: JSON.parse(JSON.stringify(data)),
       },
     });
   } catch (e) {
@@ -223,6 +221,61 @@ export default async function Dashboard() {
 }
 
 // ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
+
+/** Safely stringify a value for display, returning null for empty/null/undefined. */
+function str(v: unknown): string | null {
+  if (v == null) return null;
+  const s = String(v);
+  return s === "null" || s === "undefined" || s === "" ? null : s;
+}
+
+/** Normalize snapshot data into a consistent shape for rendering (handles v1 + v2). */
+function normalizeSnapshotData(data: Record<string, unknown>) {
+  const user = (data.user ?? {}) as Record<string, unknown>;
+  const rawOrgs = Array.isArray(data.orgs) ? data.orgs : [];
+
+  // Detect v2 format
+  const isV2 =
+    rawOrgs.length > 0 &&
+    typeof rawOrgs[0] === "object" &&
+    rawOrgs[0] !== null &&
+    "org" in (rawOrgs[0] as Record<string, unknown>);
+
+  type OrgEntry = {
+    org: Record<string, unknown>;
+    membership: Record<string, unknown> | null;
+    teams: Record<string, unknown>[];
+    errors: string[];
+  };
+
+  let orgs: OrgEntry[];
+  if (isV2) {
+    orgs = (rawOrgs as Record<string, unknown>[]).map((entry) => ({
+      org: (entry.org ?? {}) as Record<string, unknown>,
+      membership: entry.membership
+        ? (entry.membership as Record<string, unknown>)
+        : null,
+      teams: Array.isArray(entry.teams)
+        ? (entry.teams as Record<string, unknown>[])
+        : [],
+      errors: Array.isArray(entry.errors) ? (entry.errors as string[]) : [],
+    }));
+  } else {
+    // v1: flat org objects
+    orgs = (rawOrgs as Record<string, unknown>[]).map((org) => ({
+      org,
+      membership: null,
+      teams: [],
+      errors: [],
+    }));
+  }
+
+  return { user, orgs };
+}
+
+// ---------------------------------------------------------------------------
 // Components
 // ---------------------------------------------------------------------------
 
@@ -284,7 +337,9 @@ function StatusBadge({ status }: { status: string }) {
       ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
       : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400";
   return (
-    <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${color}`}>
+    <span
+      className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${color}`}
+    >
       {status}
     </span>
   );
@@ -294,7 +349,7 @@ function EvidenceCard({ snapshot }: { snapshot: NonNullable<Snapshot> }) {
   const data = (snapshot.data ?? {}) as Record<string, unknown>;
 
   return (
-    <div className="space-y-4 rounded-lg border border-foreground/10 p-5">
+    <div className="space-y-5 rounded-lg border border-foreground/10 p-5">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -338,15 +393,12 @@ function EvidenceCard({ snapshot }: { snapshot: NonNullable<Snapshot> }) {
 }
 
 function SucceededEvidence({ data }: { data: Record<string, unknown> }) {
-  const user = (data.user ?? {}) as Record<string, unknown>;
-  const orgs = Array.isArray(data.orgs)
-    ? (data.orgs as Record<string, unknown>[])
-    : [];
+  const { user, orgs } = normalizeSnapshotData(data);
 
   return (
-    <>
+    <div className="space-y-5">
       {/* GitHub account */}
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <h4 className="text-xs font-semibold uppercase tracking-wide text-foreground/40">
           GitHub Account
         </h4>
@@ -355,41 +407,127 @@ function SucceededEvidence({ data }: { data: Record<string, unknown> }) {
           <Field label="Name" value={user.name} />
           <Field label="GitHub ID" value={user.id} />
           <Field label="Email" value={user.email} />
+          <Field label="Profile" value={user.html_url} />
+          <Field label="Account Type" value={user.type} />
         </div>
       </div>
 
       {/* Organizations */}
-      <div className="space-y-1.5">
+      <div className="space-y-3">
         <h4 className="text-xs font-semibold uppercase tracking-wide text-foreground/40">
-          Organization Memberships
+          Organization Access ({orgs.length})
         </h4>
         {orgs.length === 0 ? (
           <p className="text-sm text-foreground/40">
             No organizations found for this GitHub account.
           </p>
         ) : (
-          <div className="divide-y divide-foreground/5 rounded border border-foreground/10">
-            {orgs.map((org, i) => (
-              <div key={i} className="flex items-center justify-between px-4 py-2.5 text-sm">
-                <div>
-                  <span className="font-medium">
-                    {str(org.login) || "\u2014"}
-                  </span>
-                  {"description" in org && org.description != null && (
-                    <span className="ml-2 text-foreground/40">
-                      {str(org.description)}
-                    </span>
-                  )}
-                </div>
-                <span className="text-xs text-foreground/30">
-                  ID {str(org.id) || "\u2014"}
-                </span>
-              </div>
+          <div className="space-y-3">
+            {orgs.map((entry, i) => (
+              <OrgCard key={i} entry={entry} />
             ))}
           </div>
         )}
       </div>
-    </>
+    </div>
+  );
+}
+
+function OrgCard({
+  entry,
+}: {
+  entry: {
+    org: Record<string, unknown>;
+    membership: Record<string, unknown> | null;
+    teams: Record<string, unknown>[];
+    errors: string[];
+  };
+}) {
+  const { org, membership, teams, errors } = entry;
+
+  return (
+    <div className="rounded-lg border border-foreground/10">
+      {/* Org header */}
+      <div className="flex items-center justify-between border-b border-foreground/5 px-4 py-3">
+        <div>
+          <span className="font-medium text-sm">
+            {str(org.login) ?? "\u2014"}
+          </span>
+          {str(org.description) && (
+            <span className="ml-2 text-xs text-foreground/40">
+              {str(org.description)}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {membership && str(membership.role) && (
+            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+              {str(membership.role)}
+            </span>
+          )}
+          {membership && str(membership.state) && (
+            <span className="text-xs text-foreground/40">
+              {str(membership.state)}
+            </span>
+          )}
+          <span className="text-xs text-foreground/30">
+            ID {str(org.id) ?? "\u2014"}
+          </span>
+        </div>
+      </div>
+
+      {/* Teams */}
+      <div className="px-4 py-3">
+        {teams.length === 0 ? (
+          <p className="text-xs text-foreground/30">
+            No team memberships found.
+          </p>
+        ) : (
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-foreground/40 mb-1.5">
+              Teams ({teams.length})
+            </p>
+            {teams.map((team, j) => {
+              const parent = team.parent as Record<string, unknown> | null;
+              return (
+                <div
+                  key={j}
+                  className="flex items-center justify-between text-sm"
+                >
+                  <div className="flex items-center gap-2">
+                    <span>{str(team.name) ?? "\u2014"}</span>
+                    {str(team.privacy) && (
+                      <span className="text-xs text-foreground/30">
+                        {str(team.privacy)}
+                      </span>
+                    )}
+                    {parent && str(parent.slug) && (
+                      <span className="text-xs text-foreground/30">
+                        (parent: {str(parent.slug)})
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-xs text-foreground/20">
+                    {str(team.slug)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Scope errors */}
+      {errors.length > 0 && (
+        <div className="border-t border-foreground/5 px-4 py-2">
+          {errors.map((err, k) => (
+            <p key={k} className="text-xs text-yellow-600 dark:text-yellow-400">
+              {err}
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -410,11 +548,4 @@ function Field({ label, value }: { label: string; value: unknown }) {
       <span>{display}</span>
     </>
   );
-}
-
-/** Safely stringify a value for display, returning null for empty/null/undefined. */
-function str(v: unknown): string | null {
-  if (v == null) return null;
-  const s = String(v);
-  return s === "null" || s === "undefined" || s === "" ? null : s;
 }

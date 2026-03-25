@@ -16,9 +16,7 @@ export async function POST() {
   }
 
   try {
-    const { user, orgs } = await fetchGitHubAccessReview(
-      integration.accessToken,
-    );
+    const data = await fetchGitHubAccessReview(integration.accessToken);
 
     const snapshot = await db.evidenceSnapshot.create({
       data: {
@@ -26,7 +24,7 @@ export async function POST() {
         integrationId: integration.id,
         type: "github_access_review",
         status: "succeeded",
-        data: { user, orgs },
+        data: JSON.parse(JSON.stringify(data)),
       },
     });
 
