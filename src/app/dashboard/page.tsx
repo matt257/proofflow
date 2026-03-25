@@ -599,6 +599,9 @@ function CoverageSection({ coverage }: { coverage: CoverageResult }) {
                     {c.ageDays != null && (
                       <p className="text-xs text-foreground/30">
                         {c.ageDays === 0 ? "Collected today" : `${c.ageDays}d ago`}
+                        {c.ageDays != null && c.ageDays <= 1 && (
+                          <span className="ml-1.5 text-green-600">· Auto-refreshed</span>
+                        )}
                       </p>
                     )}
                   </div>
