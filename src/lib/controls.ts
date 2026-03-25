@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 
-/** Controls that map to github_org_access_review evidence. */
-export const ORG_ACCESS_REVIEW_CONTROLS = [
+/** Full control catalog — the universe of controls ProofFlow tracks. */
+export const CONTROL_CATALOG = [
   {
     framework: "SOC2",
     code: "CC6.1",
@@ -23,9 +23,39 @@ export const ORG_ACCESS_REVIEW_CONTROLS = [
     description:
       "The entity authorizes, modifies, or removes access to data, software, functions, and other protected information assets based on roles.",
   },
+  {
+    framework: "SOC2",
+    code: "CC7.1",
+    name: "Monitoring",
+    description:
+      "The entity monitors system components and the operation of those components for anomalies.",
+  },
+  {
+    framework: "SOC2",
+    code: "CC8.1",
+    name: "Change management",
+    description:
+      "The entity authorizes, designs, develops or acquires, configures, documents, tests, approves, and implements changes to infrastructure, data, software, and procedures.",
+  },
 ] as const;
 
-/** Ensure the seed controls exist in the DB. Returns the control IDs. */
+/** Subset of controls that github_org_access_review evidence covers. */
+export const ORG_ACCESS_REVIEW_CONTROLS = CONTROL_CATALOG.filter((c) =>
+  ["CC6.1", "CC6.2", "CC6.3"].includes(c.code),
+);
+
+/** Ensure all catalog controls exist in the DB. */
+export async function ensureAllControls() {
+  for (const c of CONTROL_CATALOG) {
+    await db.control.upsert({
+      where: { framework_code: { framework: c.framework, code: c.code } },
+      create: c,
+      update: {},
+    });
+  }
+}
+
+/** Ensure the org access review controls exist and return their IDs. */
 export async function ensureControls(): Promise<string[]> {
   const ids: string[] = [];
   for (const c of ORG_ACCESS_REVIEW_CONTROLS) {

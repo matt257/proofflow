@@ -10,6 +10,10 @@ import {
   type Severity,
 } from "@/lib/access-analysis";
 import { mapSnapshotToControls, controlLabel } from "@/lib/controls";
+import {
+  getControlCoverage,
+  type CoverageResult,
+} from "@/lib/control-coverage";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
@@ -107,12 +111,20 @@ async function getDashboardData() {
       }
     }
 
+    let coverage: CoverageResult | null = null;
+    try {
+      coverage = await getControlCoverage();
+    } catch {
+      // coverage computation is best-effort
+    }
+
     return {
       schemaReady: true as const,
       integration,
       latestSnapshot,
       latestOrgSnapshot,
       history,
+      coverage,
     };
   } catch (e: unknown) {
     if (isPrismaTableMissing(e)) {
@@ -122,6 +134,7 @@ async function getDashboardData() {
         latestSnapshot: null,
         latestOrgSnapshot: null,
         history: [],
+        coverage: null,
       };
     }
     throw e;
@@ -212,8 +225,14 @@ async function collectOrgEvidence() {
 // ---------------------------------------------------------------------------
 
 export default async function Dashboard() {
-  const { schemaReady, integration, latestSnapshot, latestOrgSnapshot, history } =
-    await getDashboardData();
+  const {
+    schemaReady,
+    integration,
+    latestSnapshot,
+    latestOrgSnapshot,
+    history,
+    coverage,
+  } = await getDashboardData();
   const meta = integration?.metadata as Record<string, string> | null;
 
   return (
@@ -236,6 +255,8 @@ export default async function Dashboard() {
       ) : (
         <>
           <GitHubStatus meta={meta} />
+
+          {coverage && <CoverageSection coverage={coverage} />}
 
           <section className="space-y-4">
             <div className="flex items-center justify-between">
@@ -404,6 +425,104 @@ function ConnectGitHub() {
         Connect GitHub
       </a>
     </div>
+  );
+}
+
+function CoverageSection({ coverage }: { coverage: CoverageResult }) {
+  const { summary, controls } = coverage;
+  const covered = controls.filter((c) => c.covered);
+  const missing = controls.filter((c) => !c.covered);
+
+  return (
+    <section className="space-y-4">
+      <h2 className="text-lg font-semibold">Compliance Coverage</h2>
+
+      {/* Summary bar */}
+      <div className="rounded-lg border border-foreground/10 p-5">
+        <div className="flex items-center gap-6">
+          <div className="text-4xl font-bold">
+            {summary.coveragePercent}%
+          </div>
+          <div className="space-y-1 text-sm">
+            <p className="text-foreground/60">
+              {summary.covered} of {summary.total} controls covered
+            </p>
+            {/* Progress bar */}
+            <div className="h-2 w-48 overflow-hidden rounded-full bg-foreground/10">
+              <div
+                className="h-full rounded-full bg-green-500 transition-all"
+                style={{ width: `${summary.coveragePercent}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Control lists */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        {/* Covered */}
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-green-600">
+            Covered ({covered.length})
+          </h3>
+          {covered.length === 0 ? (
+            <p className="text-sm text-foreground/40">None yet</p>
+          ) : (
+            <div className="space-y-1.5">
+              {covered.map((c) => (
+                <div
+                  key={c.code}
+                  className="flex items-start gap-2 rounded border border-green-200 bg-green-50 px-3 py-2 dark:border-green-900/30 dark:bg-green-900/10"
+                >
+                  <span className="mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full bg-green-500" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">
+                      {c.framework} {c.code}
+                    </p>
+                    <p className="text-xs text-foreground/50">{c.name}</p>
+                    {c.lastCollectedAt && (
+                      <p className="text-xs text-foreground/30">
+                        Last: {c.lastCollectedAt.toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Missing */}
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-red-500">
+            Missing ({missing.length})
+          </h3>
+          {missing.length === 0 ? (
+            <p className="text-sm text-green-600">All controls covered</p>
+          ) : (
+            <div className="space-y-1.5">
+              {missing.map((c) => (
+                <div
+                  key={c.code}
+                  className="flex items-start gap-2 rounded border border-red-200 bg-red-50 px-3 py-2 dark:border-red-900/30 dark:bg-red-900/10"
+                >
+                  <span className="mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full bg-red-400" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">
+                      {c.framework} {c.code}
+                    </p>
+                    <p className="text-xs text-foreground/50">{c.name}</p>
+                    <p className="text-xs text-red-400">
+                      No evidence collected yet
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 

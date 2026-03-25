@@ -5,6 +5,7 @@ import {
   highestSeverity,
 } from "@/lib/access-analysis";
 import { mapSnapshotToControls, controlLabel } from "@/lib/controls";
+import { getControlCoverage } from "@/lib/control-coverage";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import JSZip from "jszip";
@@ -38,10 +39,22 @@ async function getExports() {
         },
       },
     });
-    return { schemaReady: true as const, exports };
+    let coverageSummary = { covered: 0, total: 0, coveragePercent: 0 };
+    try {
+      const cov = await getControlCoverage();
+      coverageSummary = cov.summary;
+    } catch {
+      // best-effort
+    }
+
+    return { schemaReady: true as const, exports, coverageSummary };
   } catch (e) {
     if (isPrismaTableMissing(e)) {
-      return { schemaReady: false as const, exports: [] };
+      return {
+        schemaReady: false as const,
+        exports: [],
+        coverageSummary: { covered: 0, total: 0, coveragePercent: 0 },
+      };
     }
     throw e;
   }
@@ -128,7 +141,7 @@ async function generateExport() {
 }
 
 export default async function ExportsPage() {
-  const { schemaReady, exports } = await getExports();
+  const { schemaReady, exports, coverageSummary } = await getExports();
 
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-8 p-8">
@@ -154,6 +167,10 @@ export default async function ExportsPage() {
           <div className="flex items-center justify-between">
             <p className="text-sm text-foreground/50">
               {exports.length} export{exports.length !== 1 ? "s" : ""}
+              <span className="ml-3 text-foreground/30">|</span>
+              <span className="ml-3">
+                {coverageSummary.coveragePercent}% coverage ({coverageSummary.covered}/{coverageSummary.total} controls)
+              </span>
             </p>
             <form action={generateExport}>
               <button
