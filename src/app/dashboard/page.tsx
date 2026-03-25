@@ -27,6 +27,7 @@ import {
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { RunSchedulesButton } from "./run-schedules-button";
+import { ShareLinkButton } from "./share-link-button";
 
 export const dynamic = "force-dynamic";
 
@@ -447,6 +448,17 @@ export default async function Dashboard() {
               </div>
             </section>
           )}
+
+          {/* Auditor Sharing */}
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold text-foreground/60">
+              Auditor Sharing
+            </h3>
+            <p className="text-xs text-foreground/30">
+              Generate a read-only link to share compliance status with auditors. Links expire after 7 days.
+            </p>
+            <ShareLinkButton />
+          </section>
 
           {/* Notifications */}
           <section className="space-y-3">

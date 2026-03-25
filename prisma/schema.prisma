@@ -16,6 +16,18 @@ model Workspace {
   exports                 Export[]
   schedules               Schedule[]
   notificationPreferences NotificationPreference[]
+  shareLinks              ShareLink[]
+}
+
+model ShareLink {
+  id          String    @id @default(cuid())
+  workspaceId String
+  token       String    @unique
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime?
+  createdBy   String?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
 }
 
 model Schedule {
