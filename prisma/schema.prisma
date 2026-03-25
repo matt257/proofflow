@@ -8,22 +8,38 @@ datasource db {
 }
 
 model Workspace {
-  id           String        @id @default(cuid())
-  name         String
-  createdAt    DateTime      @default(now())
-  integrations Integration[]
+  id                String             @id @default(cuid())
+  name              String
+  createdAt         DateTime           @default(now())
+  integrations      Integration[]
+  evidenceSnapshots EvidenceSnapshot[]
 }
 
 model Integration {
-  id          String   @id @default(cuid())
-  workspaceId String
-  provider    String
-  accessToken String?
-  metadata    Json?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                String             @id @default(cuid())
+  workspaceId       String
+  provider          String
+  accessToken       String?
+  metadata          Json?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  evidenceSnapshots EvidenceSnapshot[]
 
   workspace Workspace @relation(fields: [workspaceId], references: [id])
 
   @@unique([workspaceId, provider])
+}
+
+model EvidenceSnapshot {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  integrationId String
+  type          String
+  status        String
+  collectedAt   DateTime @default(now())
+  data          Json
+  createdAt     DateTime @default(now())
+
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id])
+  integration Integration @relation(fields: [integrationId], references: [id])
 }
