@@ -3,6 +3,12 @@ import {
   fetchGitHubAccessReview,
   fetchGitHubOrgAccessReview,
 } from "@/lib/github-api";
+import {
+  analyzeOrgAccessReview,
+  highestSeverity,
+  type Finding,
+  type Severity,
+} from "@/lib/access-analysis";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
@@ -634,7 +640,15 @@ function OrgReviewCard({ snapshot }: { snapshot: NonNullable<Snapshot> }) {
       </div>
 
       {snapshot.status === "succeeded" ? (
-        <OrgReviewEvidence data={data} />
+        (() => {
+          const findings = analyzeOrgAccessReview(data);
+          return (
+            <>
+              <AnalysisSummary data={data} findings={findings} />
+              <OrgReviewEvidence data={data} findings={findings} />
+            </>
+          );
+        })()
       ) : (
         <FailedEvidence data={data} />
       )}
@@ -662,14 +676,68 @@ function OrgReviewCard({ snapshot }: { snapshot: NonNullable<Snapshot> }) {
   );
 }
 
-function OrgReviewEvidence({ data }: { data: Record<string, unknown> }) {
+function AnalysisSummary({
+  data,
+  findings,
+}: {
+  data: Record<string, unknown>;
+  findings: Finding[];
+}) {
+  const rawOrgs = Array.isArray(data.orgs) ? data.orgs : [];
+  const totalOrgs = rawOrgs.length;
+  const worst = highestSeverity(findings);
+
+  if (totalOrgs === 0) return null;
+
+  return (
+    <div className="flex items-center justify-between rounded-lg border border-foreground/10 px-4 py-3 text-sm">
+      <div className="flex gap-4 text-foreground/50">
+        <span>{totalOrgs} org{totalOrgs !== 1 ? "s" : ""} analyzed</span>
+        <span>{findings.length} warning{findings.length !== 1 ? "s" : ""}</span>
+      </div>
+      {worst ? (
+        <SeverityBadge severity={worst} label={`Highest: ${worst}`} />
+      ) : (
+        <span className="text-xs text-green-600">No risks detected</span>
+      )}
+    </div>
+  );
+}
+
+function SeverityBadge({
+  severity,
+  label,
+}: {
+  severity: Severity;
+  label?: string;
+}) {
+  const colors: Record<Severity, string> = {
+    high: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+    medium:
+      "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
+    low: "bg-foreground/5 text-foreground/50",
+  };
+  return (
+    <span
+      className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${colors[severity]}`}
+    >
+      {label ?? severity}
+    </span>
+  );
+}
+
+function OrgReviewEvidence({
+  data,
+  findings,
+}: {
+  data: Record<string, unknown>;
+  findings: Finding[];
+}) {
   const rawOrgs = Array.isArray(data.orgs) ? data.orgs : [];
 
   if (rawOrgs.length === 0) {
     return (
-      <p className="text-sm text-foreground/40">
-        No organizations found.
-      </p>
+      <p className="text-sm text-foreground/40">No organizations found.</p>
     );
   }
 
@@ -684,19 +752,47 @@ function OrgReviewEvidence({ data }: { data: Record<string, unknown> }) {
           ? (entry.errors as string[])
           : [];
         const admins = members.filter((m) => m.role === "admin");
+        const orgLogin = String(org.login ?? "");
+        const orgFindings = findings.filter((f) => f.orgLogin === orgLogin);
+        const adminPct =
+          members.length > 0
+            ? Math.round((admins.length / members.length) * 100)
+            : 0;
 
         return (
           <div key={i} className="rounded-lg border border-foreground/10">
+            {/* Org header */}
             <div className="flex items-center justify-between border-b border-foreground/5 px-4 py-3">
               <span className="text-sm font-medium">
                 {str(org.login) ?? "\u2014"}
               </span>
               <div className="flex gap-3 text-xs text-foreground/40">
                 <span>{members.length} members</span>
-                <span>{admins.length} admins</span>
+                <span>
+                  {admins.length} admins ({adminPct}%)
+                </span>
               </div>
             </div>
 
+            {/* Risk signals */}
+            {orgFindings.length > 0 ? (
+              <div className="border-b border-foreground/5 px-4 py-2.5 space-y-1">
+                {orgFindings.map((f, fi) => (
+                  <div key={fi} className="flex items-center gap-2">
+                    <SeverityBadge severity={f.severity} />
+                    <span className="text-xs">{f.message}</span>
+                  </div>
+                ))}
+              </div>
+            ) : members.length > 0 ? (
+              <div className="border-b border-foreground/5 px-4 py-2.5">
+                <span className="text-xs text-green-600">
+                  No obvious access risks detected
+                </span>
+              </div>
+            ) : null}
+
+            {/* Members table */}
             {members.length > 0 && (
               <div className="overflow-auto">
                 <table className="w-full text-sm">
@@ -710,7 +806,9 @@ function OrgReviewEvidence({ data }: { data: Record<string, unknown> }) {
                   <tbody className="divide-y divide-foreground/5">
                     {members.map((m, j) => (
                       <tr key={j}>
-                        <td className="px-4 py-1.5">{str(m.login) ?? "\u2014"}</td>
+                        <td className="px-4 py-1.5">
+                          {str(m.login) ?? "\u2014"}
+                        </td>
                         <td className="px-4 py-1.5">
                           <span
                             className={
