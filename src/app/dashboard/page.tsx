@@ -30,6 +30,7 @@ import Link from "next/link";
 import { RunSchedulesButton } from "./run-schedules-button";
 import { ShareLinkButton } from "./share-link-button";
 import { EvidenceUploadForm } from "./evidence-upload-form";
+import { AWSConnectForm } from "./aws-connect-form";
 
 export const dynamic = "force-dynamic";
 
@@ -162,6 +163,25 @@ async function getDashboardData() {
       // best-effort
     }
 
+    let awsConnected = false;
+    let latestAWSSnapshot: Snapshot = null;
+    try {
+      const awsIntegration = await db.integration.findFirst({
+        where: { provider: "aws" },
+        select: { id: true },
+      });
+      awsConnected = !!awsIntegration;
+      if (awsIntegration) {
+        latestAWSSnapshot = await db.evidenceSnapshot.findFirst({
+          where: { integrationId: awsIntegration.id, type: "aws_monitoring" },
+          orderBy: { collectedAt: "desc" },
+          select: { id: true, status: true, type: true, collectedAt: true, data: true },
+        });
+      }
+    } catch {
+      // best-effort
+    }
+
     return {
       schemaReady: true as const,
       integration,
@@ -172,6 +192,8 @@ async function getDashboardData() {
       schedule,
       notificationEmail,
       plan,
+      awsConnected,
+      latestAWSSnapshot,
     };
   } catch (e: unknown) {
     if (isPrismaTableMissing(e)) {
@@ -185,6 +207,8 @@ async function getDashboardData() {
         schedule: null,
         notificationEmail: null,
         plan: "free" as Plan,
+        awsConnected: false,
+        latestAWSSnapshot: null,
       };
     }
     throw e;
@@ -315,6 +339,8 @@ export default async function Dashboard() {
     schedule,
     notificationEmail,
     plan,
+    awsConnected,
+    latestAWSSnapshot,
   } = await getDashboardData();
   const meta = integration?.metadata as Record<string, string> | null;
 
@@ -473,6 +499,50 @@ export default async function Dashboard() {
               </div>
             </section>
           )}
+
+          {/* AWS Monitoring */}
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold text-foreground/60">
+              AWS Monitoring (CC7.1)
+            </h3>
+            {awsConnected ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between rounded-lg border border-foreground/10 px-4 py-3 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
+                    <span className="font-medium">AWS connected</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <form action="/api/evidence/aws-monitoring/collect" method="POST">
+                      <button type="submit" className="text-xs text-foreground/50 hover:text-foreground/70">
+                        Collect now
+                      </button>
+                    </form>
+                    <form action="/api/aws/disconnect" method="POST">
+                      <button type="submit" className="text-xs text-red-400 hover:text-red-500">
+                        Disconnect
+                      </button>
+                    </form>
+                  </div>
+                </div>
+                {latestAWSSnapshot && latestAWSSnapshot.status === "succeeded" && (
+                  <AWSMonitoringCard data={(latestAWSSnapshot.data ?? {}) as Record<string, unknown>} collectedAt={latestAWSSnapshot.collectedAt} />
+                )}
+                {latestAWSSnapshot && latestAWSSnapshot.status === "failed" && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-600 dark:border-red-900/30 dark:bg-red-900/10 dark:text-red-400">
+                    Last collection failed: {String((latestAWSSnapshot.data as Record<string, unknown>)?.error ?? "Unknown error")}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs text-foreground/30">
+                  Connect AWS to automatically verify CloudTrail is enabled and satisfy CC7.1 (Monitoring).
+                </p>
+                <AWSConnectForm />
+              </div>
+            )}
+          </section>
 
           {/* Auditor Sharing */}
           <section className="space-y-3">
@@ -1678,6 +1748,57 @@ function OrgReviewEvidence({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function AWSMonitoringCard({ data, collectedAt }: { data: Record<string, unknown>; collectedAt: Date }) {
+  const enabled = Boolean(data.cloudTrailEnabled);
+  const trailCount = Number(data.trailCount ?? 0);
+  const multiRegion = Boolean(data.multiRegion);
+  const region = String(data.region ?? "");
+  const trails = Array.isArray(data.trails) ? (data.trails as Record<string, unknown>[]) : [];
+
+  return (
+    <div className="rounded-lg border border-foreground/10 p-4 text-sm">
+      <div className="flex items-center justify-between">
+        <span className="font-semibold">CloudTrail Status</span>
+        <time className="text-xs text-foreground/40">{collectedAt.toLocaleString()}</time>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+        <div>
+          <span className="text-foreground/40">CloudTrail enabled</span>
+          <p className={`font-medium ${enabled ? "text-green-600" : "text-red-500"}`}>{enabled ? "Yes" : "No"}</p>
+        </div>
+        <div>
+          <span className="text-foreground/40">Trails</span>
+          <p className="font-medium">{trailCount}</p>
+        </div>
+        <div>
+          <span className="text-foreground/40">Multi-region</span>
+          <p className="font-medium">{multiRegion ? "Yes" : "No"}</p>
+        </div>
+        <div>
+          <span className="text-foreground/40">Region</span>
+          <p className="font-medium">{region}</p>
+        </div>
+      </div>
+      {trails.length > 0 && (
+        <div className="mt-3 space-y-1">
+          {trails.map((t, i) => (
+            <div key={i} className="flex items-center gap-2 text-xs">
+              <span className={`inline-block h-1.5 w-1.5 rounded-full ${Boolean(t.isLogging) ? "bg-green-500" : "bg-red-400"}`} />
+              <span className="text-foreground/60">{String(t.name ?? "")}</span>
+              {Boolean(t.isMultiRegion) && <span className="text-foreground/30">(multi-region)</span>}
+            </div>
+          ))}
+        </div>
+      )}
+      {!enabled && (
+        <p className="mt-3 text-xs text-yellow-600 dark:text-yellow-400">
+          CloudTrail not detected — monitoring evidence may be insufficient for CC7.1.
+        </p>
+      )}
     </div>
   );
 }

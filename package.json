@@ -12,6 +12,7 @@
     "prisma:generate": "prisma generate"
   },
   "dependencies": {
+    "@aws-sdk/client-cloudtrail": "^3.1016.0",
     "@prisma/adapter-neon": "^7.5.0",
     "@prisma/client": "^7.5.0",
     "@types/pdfkit": "^0.17.5",

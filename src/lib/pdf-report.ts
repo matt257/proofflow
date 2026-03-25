@@ -227,6 +227,29 @@ export async function generateAuditPDF(): Promise<Buffer> {
     }
   }
 
+  // AWS Monitoring
+  const awsSnapshot = await db.evidenceSnapshot.findFirst({
+    where: { type: "aws_monitoring", status: "succeeded" },
+    orderBy: { collectedAt: "desc" },
+    select: { collectedAt: true, data: true },
+  }).catch(() => null);
+
+  if (awsSnapshot) {
+    const aws = awsSnapshot.data as Record<string, unknown>;
+    doc.moveDown(1);
+    doc.fontSize(12).font("Helvetica-Bold").fillColor("#000000").text("AWS Monitoring (CloudTrail)");
+    doc.moveDown(0.3);
+    doc.fontSize(10).font("Helvetica");
+    doc.text(`Collected: ${awsSnapshot.collectedAt.toLocaleDateString()}`);
+    const ctEnabled = Boolean(aws.cloudTrailEnabled);
+    doc.text(`CloudTrail enabled: `, { continued: true });
+    doc.fillColor(ctEnabled ? COLOR_GREEN : COLOR_RED).text(ctEnabled ? "Yes" : "No");
+    doc.fillColor("#000000");
+    doc.text(`Trails: ${Number(aws.trailCount ?? 0)}`);
+    doc.text(`Multi-region: ${Boolean(aws.multiRegion) ? "Yes" : "No"}`);
+    doc.text(`Region: ${String(aws.region ?? "")}`);
+  }
+
   // -----------------------------------------------------------------------
   // Risk Findings
   // -----------------------------------------------------------------------

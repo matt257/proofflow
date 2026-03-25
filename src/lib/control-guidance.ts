@@ -67,13 +67,16 @@ const GUIDANCE: Record<string, ControlGuidance> = {
     purpose: "Proves that system activity is being monitored for anomalies.",
     evidenceRequirement:
       "Monitoring or audit log evidence showing system activity is being captured and reviewed.",
-    evidenceSource: "Audit logs",
+    evidenceSource: "AWS CloudTrail",
     actions: [
-      "Enable audit logging for your systems",
-      "Collect and store logs regularly",
-      "Review logs periodically for anomalies",
+      "Connect AWS and collect CloudTrail evidence",
+      "Verify CloudTrail is enabled and logging",
+      "Ensure multi-region logging if applicable",
     ],
-    proofflowAction: null,
+    proofflowAction: {
+      label: "Collect AWS monitoring evidence",
+      route: "/api/evidence/aws-monitoring/collect",
+    },
   },
   "CC8.1": {
     description:
