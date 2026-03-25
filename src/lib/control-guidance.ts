@@ -81,13 +81,16 @@ const GUIDANCE: Record<string, ControlGuidance> = {
     purpose: "Proves that changes go through a controlled review and approval process.",
     evidenceRequirement:
       "Evidence of change management, such as pull request reviews, approvals, or documented change workflows.",
-    evidenceSource: "Pull request reviews",
+    evidenceSource: "GitHub pull request reviews",
     actions: [
-      "Require pull request reviews for code changes",
-      "Document change approval workflows",
-      "Collect evidence of change reviews",
+      "Run a GitHub organization access review (includes PR data)",
+      "Verify pull requests have reviewers assigned",
+      "Export evidence pack for audit",
     ],
-    proofflowAction: null,
+    proofflowAction: {
+      label: "Run org access review",
+      route: "/api/evidence/github-org-access-review/collect",
+    },
   },
 };
 

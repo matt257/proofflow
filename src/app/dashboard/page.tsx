@@ -1121,22 +1121,34 @@ function AuditReadinessBanner({ readiness }: { readiness: AuditReadiness }) {
 
 function GitHubStatus({ meta }: { meta: Record<string, string> | null }) {
   return (
-    <div className="flex items-center justify-between rounded-lg border border-foreground/10 px-5 py-3">
-      <div className="flex items-center gap-3">
-        <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
-        <span className="text-sm font-medium">GitHub connected</span>
-        {meta?.githubLogin && (
-          <span className="text-sm text-foreground/50">
-            @{meta.githubLogin}
-          </span>
-        )}
+    <div className="rounded-lg border border-foreground/10 px-5 py-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
+          <span className="text-sm font-medium">GitHub connected</span>
+          {meta?.githubLogin && (
+            <span className="text-sm text-foreground/50">
+              @{meta.githubLogin}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          <a
+            href="/api/github/connect"
+            className="text-xs text-foreground/40 hover:text-foreground/60"
+          >
+            Reconnect
+          </a>
+          <form action="/api/github/disconnect" method="POST">
+            <button
+              type="submit"
+              className="text-xs text-red-400 hover:text-red-500"
+            >
+              Disconnect
+            </button>
+          </form>
+        </div>
       </div>
-      <a
-        href="/api/github/connect"
-        className="text-xs text-foreground/40 hover:text-foreground/60"
-      >
-        Reconnect
-      </a>
     </div>
   );
 }
@@ -1488,6 +1500,12 @@ function OrgReviewEvidence({
         const errors = Array.isArray(entry.errors)
           ? (entry.errors as string[])
           : [];
+        const repos = Array.isArray(entry.repos)
+          ? (entry.repos as Record<string, unknown>[])
+          : [];
+        const prs = Array.isArray(entry.pullRequests)
+          ? (entry.pullRequests as Record<string, unknown>[])
+          : [];
         const admins = members.filter((m) => m.role === "admin");
         const orgLogin = String(org.login ?? "");
         const orgFindings = findings.filter((f) => f.orgLogin === orgLogin);
@@ -1505,9 +1523,8 @@ function OrgReviewEvidence({
               </span>
               <div className="flex gap-3 text-xs text-foreground/40">
                 <span>{members.length} members</span>
-                <span>
-                  {admins.length} admins ({adminPct}%)
-                </span>
+                <span>{admins.length} admins ({adminPct}%)</span>
+                {repos.length > 0 && <span>{repos.length} repos</span>}
               </div>
             </div>
 
@@ -1583,6 +1600,77 @@ function OrgReviewEvidence({
                     {err}
                   </p>
                 ))}
+              </div>
+            )}
+
+            {/* Repository Access */}
+            {repos.length > 0 && (
+              <div className="border-t border-foreground/5 px-4 py-3">
+                <p className="text-xs font-semibold text-foreground/50">
+                  Repository Access ({repos.length} repos)
+                </p>
+                <div className="mt-1.5 space-y-1">
+                  {repos.slice(0, 8).map((r, ri) => (
+                    <div key={ri} className="flex items-center gap-2 text-xs">
+                      <span className={`rounded px-1.5 py-0.5 font-mono text-[10px] ${r.private ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"}`}>
+                        {r.private ? "private" : "public"}
+                      </span>
+                      <span className="text-foreground/60">{String(r.name ?? "")}</span>
+                      {Boolean(r.archived) && <span className="text-foreground/30">(archived)</span>}
+                    </div>
+                  ))}
+                  {repos.length > 8 && (
+                    <p className="text-xs text-foreground/30">
+                      + {repos.length - 8} more repositories
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Pull Requests / Change Management */}
+            {prs.length > 0 && (
+              <div className="border-t border-foreground/5 px-4 py-3">
+                <p className="text-xs font-semibold text-foreground/50">
+                  Recent Pull Requests ({prs.length})
+                </p>
+                <div className="mt-1.5 overflow-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-left text-foreground/40">
+                        <th className="py-1 pr-3 font-medium">Repo</th>
+                        <th className="py-1 pr-3 font-medium">PR</th>
+                        <th className="py-1 pr-3 font-medium">Author</th>
+                        <th className="py-1 pr-3 font-medium">State</th>
+                        <th className="py-1 font-medium">Reviewers</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-foreground/5">
+                      {prs.slice(0, 10).map((pr, pi) => (
+                        <tr key={pi}>
+                          <td className="py-1 pr-3 text-foreground/50">{String(pr.repo)}</td>
+                          <td className="py-1 pr-3 font-medium">#{String(pr.number)}</td>
+                          <td className="py-1 pr-3 text-foreground/50">{String(pr.author)}</td>
+                          <td className="py-1 pr-3">
+                            <span className={pr.merged_at ? "text-purple-600" : pr.state === "open" ? "text-green-600" : "text-red-500"}>
+                              {pr.merged_at ? "merged" : String(pr.state)}
+                            </span>
+                          </td>
+                          <td className="py-1 text-foreground/40">
+                            {Array.isArray(pr.reviewers) && pr.reviewers.length > 0
+                              ? pr.reviewers.join(", ")
+                              : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {prs.length > 10 && (
+                    <p className="mt-1 text-xs text-foreground/30">
+                      + {prs.length - 10} more pull requests
+                    </p>
+                  )}
+                </div>
               </div>
             )}
           </div>

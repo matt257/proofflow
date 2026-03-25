@@ -150,9 +150,33 @@ export type OrgMember = {
   role: "admin" | "member";
 };
 
+export type RepoSummary = {
+  name: string;
+  id: number;
+  private: boolean;
+  archived: boolean;
+  default_branch: string;
+  pushed_at: string | null;
+  updated_at: string | null;
+  permissions?: Record<string, boolean>;
+};
+
+export type PullRequestSummary = {
+  repo: string;
+  number: number;
+  title: string;
+  state: string;
+  created_at: string;
+  merged_at: string | null;
+  author: string;
+  reviewers: string[];
+};
+
 export type OrgMembershipEntry = {
   org: GitHubOrg;
   members: OrgMember[];
+  repos: RepoSummary[];
+  pullRequests: PullRequestSummary[];
   errors: string[];
 };
 
@@ -193,7 +217,7 @@ export async function fetchGitHubOrgAccessReview(
         errors.push(
           "Could not list org members (may require org:read or admin:org scope)",
         );
-        return { org, members: [], errors };
+        return { org, members: [], repos: [], pullRequests: [], errors };
       }
 
       // Fetch admin-only list to determine roles
@@ -219,9 +243,58 @@ export async function fetchGitHubOrgAccessReview(
         role: adminLogins.has(m.login) ? "admin" : "member",
       }));
 
-      return { org, members, errors };
+      // Fetch repos (up to 30 most recently pushed)
+      let repos: RepoSummary[] = [];
+      const rawRepos = await githubFetchOptional<Record<string, unknown>[]>(
+        `/orgs/${org.login}/repos?sort=pushed&per_page=30`,
+        token,
+      );
+      if (rawRepos) {
+        repos = rawRepos.map((r) => ({
+          name: String(r.name ?? ""),
+          id: Number(r.id ?? 0),
+          private: Boolean(r.private),
+          archived: Boolean(r.archived),
+          default_branch: String(r.default_branch ?? "main"),
+          pushed_at: r.pushed_at ? String(r.pushed_at) : null,
+          updated_at: r.updated_at ? String(r.updated_at) : null,
+          permissions: r.permissions as Record<string, boolean> | undefined,
+        }));
+      } else {
+        errors.push("Could not list org repos (may require repo scope)");
+      }
+
+      // Fetch recent PRs from up to 5 most active repos
+      let pullRequests: PullRequestSummary[] = [];
+      const prRepos = repos.filter((r) => !r.archived).slice(0, 5);
+      for (const repo of prRepos) {
+        const rawPRs = await githubFetchOptional<Record<string, unknown>[]>(
+          `/repos/${org.login}/${repo.name}/pulls?state=all&sort=updated&direction=desc&per_page=10`,
+          token,
+        );
+        if (rawPRs) {
+          for (const pr of rawPRs) {
+            const author = pr.user as Record<string, unknown> | null;
+            const requestedReviewers = Array.isArray(pr.requested_reviewers)
+              ? (pr.requested_reviewers as Record<string, unknown>[])
+              : [];
+            pullRequests.push({
+              repo: repo.name,
+              number: Number(pr.number ?? 0),
+              title: String(pr.title ?? ""),
+              state: String(pr.state ?? ""),
+              created_at: String(pr.created_at ?? ""),
+              merged_at: pr.merged_at ? String(pr.merged_at) : null,
+              author: String(author?.login ?? "unknown"),
+              reviewers: requestedReviewers.map((r) => String(r.login ?? "")),
+            });
+          }
+        }
+      }
+
+      return { org, members, repos, pullRequests, errors };
     }),
   );
 
-  return { orgs, collectorVersion: 3 };
+  return { orgs, collectorVersion: 4 };
 }

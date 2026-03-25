@@ -41,7 +41,7 @@ export const CONTROL_CATALOG = [
 
 /** Subset of controls that github_org_access_review evidence covers. */
 export const ORG_ACCESS_REVIEW_CONTROLS = CONTROL_CATALOG.filter((c) =>
-  ["CC6.1", "CC6.2", "CC6.3"].includes(c.code),
+  ["CC6.1", "CC6.2", "CC6.3", "CC8.1"].includes(c.code),
 );
 
 /** Ensure all catalog controls exist in the DB. */
@@ -72,7 +72,8 @@ export async function ensureControls(): Promise<string[]> {
   return ids;
 }
 
-/** Map a snapshot to the org access review controls. */
+/** Map a snapshot to the org access review controls.
+ *  If the snapshot contains PR data (v4+), also map CC8.1. */
 export async function mapSnapshotToControls(snapshotId: string) {
   const controlIds = await ensureControls();
   for (const controlId of controlIds) {
@@ -83,6 +84,30 @@ export async function mapSnapshotToControls(snapshotId: string) {
       create: { snapshotId, controlId },
       update: {},
     });
+  }
+
+  // Check if snapshot has PR data → also map CC8.1
+  const snapshot = await db.evidenceSnapshot.findUnique({
+    where: { id: snapshotId },
+    select: { data: true },
+  });
+  const data = (snapshot?.data ?? {}) as Record<string, unknown>;
+  const orgs = Array.isArray(data.orgs) ? (data.orgs as Record<string, unknown>[]) : [];
+  const hasPRs = orgs.some((o) => Array.isArray(o.pullRequests) && (o.pullRequests as unknown[]).length > 0);
+
+  if (hasPRs) {
+    await ensureAllControls();
+    const cc81 = await db.control.findUnique({
+      where: { framework_code: { framework: "SOC2", code: "CC8.1" } },
+      select: { id: true },
+    });
+    if (cc81) {
+      await db.evidenceControlMapping.upsert({
+        where: { snapshotId_controlId: { snapshotId, controlId: cc81.id } },
+        create: { snapshotId, controlId: cc81.id },
+        update: {},
+      });
+    }
   }
 }
 
