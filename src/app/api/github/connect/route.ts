@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { getGitHubEnv } from "@/lib/github";
+import { getGitHubEnv, getAppUrl } from "@/lib/github";
 
 export async function GET(request: Request) {
   const { clientId } = getGitHubEnv();
-  const { origin } = new URL(request.url);
-  const redirectUri = `${origin}/api/github/callback`;
+  const appUrl = getAppUrl(request.url);
+  const redirectUri = `${appUrl}/api/github/callback`;
 
   const params = new URLSearchParams({
     client_id: clientId,

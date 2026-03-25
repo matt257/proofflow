@@ -8,3 +8,14 @@ export function getGitHubEnv() {
 
   return { clientId, clientSecret };
 }
+
+/** Stable app origin for OAuth redirects. Falls back to request origin for local dev. */
+export function getAppUrl(requestUrl?: string): string {
+  if (process.env.APP_URL) {
+    return process.env.APP_URL.replace(/\/+$/, "");
+  }
+  if (requestUrl) {
+    return new URL(requestUrl).origin;
+  }
+  throw new Error("APP_URL is not set and no request URL available");
+}

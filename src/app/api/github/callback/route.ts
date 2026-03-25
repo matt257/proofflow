@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import { getGitHubEnv } from "@/lib/github";
+import { getGitHubEnv, getAppUrl } from "@/lib/github";
 import { db } from "@/lib/db";
 
 export async function GET(request: Request) {
   const { clientId, clientSecret } = getGitHubEnv();
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
+  const appUrl = getAppUrl(request.url);
   const code = searchParams.get("code");
 
   if (!code) {
@@ -80,5 +81,5 @@ export async function GET(request: Request) {
     },
   });
 
-  return NextResponse.redirect(`${origin}/dashboard`);
+  return NextResponse.redirect(`${appUrl}/dashboard`);
 }
