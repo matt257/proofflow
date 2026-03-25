@@ -39,7 +39,7 @@ async function getExports() {
         },
       },
     });
-    let coverageSummary = { covered: 0, total: 0, coveragePercent: 0 };
+    let coverageSummary = { covered: 0, stale: 0, missing: 0, total: 0, coveragePercent: 0 };
     try {
       const cov = await getControlCoverage();
       coverageSummary = cov.summary;
@@ -169,7 +169,13 @@ export default async function ExportsPage() {
               {exports.length} export{exports.length !== 1 ? "s" : ""}
               <span className="ml-3 text-foreground/30">|</span>
               <span className="ml-3">
-                {coverageSummary.coveragePercent}% coverage ({coverageSummary.covered}/{coverageSummary.total} controls)
+                {coverageSummary.coveragePercent}% healthy
+                {coverageSummary.stale > 0 && (
+                  <> &middot; {coverageSummary.stale} stale</>
+                )}
+                {coverageSummary.missing > 0 && (
+                  <> &middot; {coverageSummary.missing} missing</>
+                )}
               </span>
             </p>
             <form action={generateExport}>

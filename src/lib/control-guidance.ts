@@ -72,13 +72,31 @@ export function getControlGuidance(code: string): ControlGuidance | null {
   return GUIDANCE[code] ?? null;
 }
 
-/** Get the top missing controls that have actionable ProofFlow automations. */
+/**
+ * Get the top actionable items for controls that need attention.
+ * `staleCodes` are prioritized with "Re-run" labels; `missingCodes` get setup labels.
+ */
 export function getNextActions(
   missingCodes: string[],
+  staleCodes: string[] = [],
 ): Array<{ code: string; label: string; route: string }> {
   const actions: Array<{ code: string; label: string; route: string }> = [];
   const seen = new Set<string>();
 
+  // Stale controls with automation get prioritized (re-run)
+  for (const code of staleCodes) {
+    const g = GUIDANCE[code];
+    if (g?.proofflowAction && !seen.has(g.proofflowAction.route)) {
+      seen.add(g.proofflowAction.route);
+      actions.push({
+        code,
+        label: `Re-run ${g.proofflowAction.label.toLowerCase()}`,
+        route: g.proofflowAction.route,
+      });
+    }
+  }
+
+  // Missing controls with automation
   for (const code of missingCodes) {
     const g = GUIDANCE[code];
     if (g?.proofflowAction && !seen.has(g.proofflowAction.route)) {
@@ -91,10 +109,10 @@ export function getNextActions(
     }
   }
 
-  // Also include manual-only controls
-  for (const code of missingCodes) {
+  // Manual-only controls
+  for (const code of [...staleCodes, ...missingCodes]) {
     const g = GUIDANCE[code];
-    if (g && !g.proofflowAction && actions.length < 3) {
+    if (g && !g.proofflowAction && !actions.some((a) => a.code === code) && actions.length < 3) {
       actions.push({
         code,
         label: `Set up ${g.description.toLowerCase().replace(/\.$/, "")}`,

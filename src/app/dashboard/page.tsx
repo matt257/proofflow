@@ -472,29 +472,49 @@ function ConnectGitHub() {
 
 function CoverageSection({ coverage }: { coverage: CoverageResult }) {
   const { summary, controls } = coverage;
-  const covered = controls.filter((c) => c.covered);
-  const missing = controls.filter((c) => !c.covered);
-  const nextActions = getNextActions(missing.map((c) => c.code));
+  const covered = controls.filter((c) => c.status === "covered");
+  const stale = controls.filter((c) => c.status === "stale");
+  const missing = controls.filter((c) => c.status === "missing");
+  const nextActions = getNextActions(
+    missing.map((c) => c.code),
+    stale.map((c) => c.code),
+  );
 
   return (
     <section className="space-y-4">
       <h2 className="text-lg font-semibold">Compliance Coverage</h2>
 
-      {/* Summary bar */}
+      {/* Health summary */}
       <div className="rounded-lg border border-foreground/10 p-5">
         <div className="flex items-center gap-6">
           <div className="text-4xl font-bold">
             {summary.coveragePercent}%
           </div>
-          <div className="space-y-1 text-sm">
-            <p className="text-foreground/60">
-              {summary.covered} of {summary.total} controls covered
-            </p>
+          <div className="space-y-1.5 text-sm">
+            <div className="flex gap-4 text-foreground/60">
+              <span className="text-green-600">{summary.covered} healthy</span>
+              {summary.stale > 0 && (
+                <span className="text-yellow-600">{summary.stale} stale</span>
+              )}
+              {summary.missing > 0 && (
+                <span className="text-red-500">{summary.missing} missing</span>
+              )}
+            </div>
             <div className="h-2 w-48 overflow-hidden rounded-full bg-foreground/10">
-              <div
-                className="h-full rounded-full bg-green-500 transition-all"
-                style={{ width: `${summary.coveragePercent}%` }}
-              />
+              <div className="flex h-full">
+                <div
+                  className="h-full bg-green-500 transition-all"
+                  style={{
+                    width: `${(summary.covered / summary.total) * 100}%`,
+                  }}
+                />
+                <div
+                  className="h-full bg-yellow-400 transition-all"
+                  style={{
+                    width: `${(summary.stale / summary.total) * 100}%`,
+                  }}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -556,9 +576,9 @@ function CoverageSection({ coverage }: { coverage: CoverageResult }) {
                       {c.framework} {c.code}
                     </p>
                     <p className="text-xs text-foreground/50">{c.name}</p>
-                    {c.lastCollectedAt && (
+                    {c.ageDays != null && (
                       <p className="text-xs text-foreground/30">
-                        Last: {c.lastCollectedAt.toLocaleDateString()}
+                        {c.ageDays === 0 ? "Collected today" : `${c.ageDays}d ago`}
                       </p>
                     )}
                   </div>
@@ -568,64 +588,113 @@ function CoverageSection({ coverage }: { coverage: CoverageResult }) {
           )}
         </div>
 
-        {/* Missing */}
-        <div className="space-y-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-red-500">
-            Missing ({missing.length})
-          </h3>
-          {missing.length === 0 ? (
-            <p className="text-sm text-green-600">All controls covered</p>
-          ) : (
-            <div className="space-y-1.5">
-              {missing.map((c) => {
-                const guidance = getControlGuidance(c.code);
-                return (
-                  <div
-                    key={c.code}
-                    className="rounded border border-red-200 bg-red-50 px-3 py-2 dark:border-red-900/30 dark:bg-red-900/10"
-                  >
-                    <div className="flex items-start gap-2">
-                      <span className="mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full bg-red-400" />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium">
-                          {c.framework} {c.code}
-                        </p>
-                        <p className="text-xs text-foreground/50">
-                          {c.name}
-                        </p>
+        <div className="space-y-4">
+          {/* Stale */}
+          {stale.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-yellow-600">
+                Stale ({stale.length})
+              </h3>
+              <div className="space-y-1.5">
+                {stale.map((c) => {
+                  const guidance = getControlGuidance(c.code);
+                  return (
+                    <div
+                      key={c.code}
+                      className="rounded border border-yellow-300 bg-yellow-50 px-3 py-2 dark:border-yellow-900/30 dark:bg-yellow-900/10"
+                    >
+                      <div className="flex items-start gap-2">
+                        <span className="mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full bg-yellow-500" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium">
+                            {c.framework} {c.code}
+                          </p>
+                          <p className="text-xs text-foreground/50">{c.name}</p>
+                          <p className="text-xs text-yellow-600 dark:text-yellow-400">
+                            Last collected {c.ageDays}d ago &mdash; evidence is out of date
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                    {guidance && (
-                      <div className="mt-2 ml-4 space-y-1.5">
-                        <p className="text-xs font-medium text-foreground/40">
-                          Next steps:
-                        </p>
-                        <ul className="list-disc pl-4 text-xs text-foreground/50 space-y-0.5">
-                          {guidance.actions.map((a, i) => (
-                            <li key={i}>{a}</li>
-                          ))}
-                        </ul>
-                        {guidance.proofflowAction && (
-                          <form
-                            action={guidance.proofflowAction.route}
-                            method="POST"
-                            className="pt-1"
+                      {guidance?.proofflowAction && (
+                        <form
+                          action={guidance.proofflowAction.route}
+                          method="POST"
+                          className="mt-2 ml-4"
+                        >
+                          <button
+                            type="submit"
+                            className="rounded bg-yellow-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-yellow-700"
                           >
-                            <button
-                              type="submit"
-                              className="rounded bg-foreground px-3 py-1 text-xs font-medium text-background transition-colors hover:bg-foreground/90"
-                            >
-                              {guidance.proofflowAction.label}
-                            </button>
-                          </form>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                            Re-run {guidance.proofflowAction.label.toLowerCase()}
+                          </button>
+                        </form>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
+
+          {/* Missing */}
+          <div className="space-y-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-red-500">
+              Missing ({missing.length})
+            </h3>
+            {missing.length === 0 && stale.length === 0 ? (
+              <p className="text-sm text-green-600">All controls covered</p>
+            ) : missing.length === 0 ? null : (
+              <div className="space-y-1.5">
+                {missing.map((c) => {
+                  const guidance = getControlGuidance(c.code);
+                  return (
+                    <div
+                      key={c.code}
+                      className="rounded border border-red-200 bg-red-50 px-3 py-2 dark:border-red-900/30 dark:bg-red-900/10"
+                    >
+                      <div className="flex items-start gap-2">
+                        <span className="mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full bg-red-400" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium">
+                            {c.framework} {c.code}
+                          </p>
+                          <p className="text-xs text-foreground/50">
+                            {c.name}
+                          </p>
+                        </div>
+                      </div>
+                      {guidance && (
+                        <div className="mt-2 ml-4 space-y-1.5">
+                          <p className="text-xs font-medium text-foreground/40">
+                            Next steps:
+                          </p>
+                          <ul className="list-disc pl-4 text-xs text-foreground/50 space-y-0.5">
+                            {guidance.actions.map((a, i) => (
+                              <li key={i}>{a}</li>
+                            ))}
+                          </ul>
+                          {guidance.proofflowAction && (
+                            <form
+                              action={guidance.proofflowAction.route}
+                              method="POST"
+                              className="pt-1"
+                            >
+                              <button
+                                type="submit"
+                                className="rounded bg-foreground px-3 py-1 text-xs font-medium text-background transition-colors hover:bg-foreground/90"
+                              >
+                                {guidance.proofflowAction.label}
+                              </button>
+                            </form>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </section>
