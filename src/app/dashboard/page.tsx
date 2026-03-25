@@ -14,6 +14,10 @@ import {
   getControlCoverage,
   type CoverageResult,
 } from "@/lib/control-coverage";
+import {
+  getControlGuidance,
+  getNextActions,
+} from "@/lib/control-guidance";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
@@ -432,6 +436,7 @@ function CoverageSection({ coverage }: { coverage: CoverageResult }) {
   const { summary, controls } = coverage;
   const covered = controls.filter((c) => c.covered);
   const missing = controls.filter((c) => !c.covered);
+  const nextActions = getNextActions(missing.map((c) => c.code));
 
   return (
     <section className="space-y-4">
@@ -447,7 +452,6 @@ function CoverageSection({ coverage }: { coverage: CoverageResult }) {
             <p className="text-foreground/60">
               {summary.covered} of {summary.total} controls covered
             </p>
-            {/* Progress bar */}
             <div className="h-2 w-48 overflow-hidden rounded-full bg-foreground/10">
               <div
                 className="h-full rounded-full bg-green-500 transition-all"
@@ -457,6 +461,40 @@ function CoverageSection({ coverage }: { coverage: CoverageResult }) {
           </div>
         </div>
       </div>
+
+      {/* Next Actions */}
+      {nextActions.length > 0 && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900/30 dark:bg-blue-900/10">
+          <h3 className="text-sm font-semibold text-blue-800 dark:text-blue-300">
+            Next Actions
+          </h3>
+          <div className="mt-2 space-y-2">
+            {nextActions.map((a) => (
+              <div
+                key={a.code}
+                className="flex items-center justify-between"
+              >
+                <span className="text-sm text-blue-700 dark:text-blue-400">
+                  {a.label}{" "}
+                  <span className="text-blue-400 dark:text-blue-500">
+                    ({a.code})
+                  </span>
+                </span>
+                {a.route && (
+                  <form action={a.route} method="POST">
+                    <button
+                      type="submit"
+                      className="rounded bg-blue-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-blue-700"
+                    >
+                      {a.label}
+                    </button>
+                  </form>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Control lists */}
       <div className="grid gap-4 sm:grid-cols-2">
@@ -501,23 +539,53 @@ function CoverageSection({ coverage }: { coverage: CoverageResult }) {
             <p className="text-sm text-green-600">All controls covered</p>
           ) : (
             <div className="space-y-1.5">
-              {missing.map((c) => (
-                <div
-                  key={c.code}
-                  className="flex items-start gap-2 rounded border border-red-200 bg-red-50 px-3 py-2 dark:border-red-900/30 dark:bg-red-900/10"
-                >
-                  <span className="mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full bg-red-400" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">
-                      {c.framework} {c.code}
-                    </p>
-                    <p className="text-xs text-foreground/50">{c.name}</p>
-                    <p className="text-xs text-red-400">
-                      No evidence collected yet
-                    </p>
+              {missing.map((c) => {
+                const guidance = getControlGuidance(c.code);
+                return (
+                  <div
+                    key={c.code}
+                    className="rounded border border-red-200 bg-red-50 px-3 py-2 dark:border-red-900/30 dark:bg-red-900/10"
+                  >
+                    <div className="flex items-start gap-2">
+                      <span className="mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full bg-red-400" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium">
+                          {c.framework} {c.code}
+                        </p>
+                        <p className="text-xs text-foreground/50">
+                          {c.name}
+                        </p>
+                      </div>
+                    </div>
+                    {guidance && (
+                      <div className="mt-2 ml-4 space-y-1.5">
+                        <p className="text-xs font-medium text-foreground/40">
+                          Next steps:
+                        </p>
+                        <ul className="list-disc pl-4 text-xs text-foreground/50 space-y-0.5">
+                          {guidance.actions.map((a, i) => (
+                            <li key={i}>{a}</li>
+                          ))}
+                        </ul>
+                        {guidance.proofflowAction && (
+                          <form
+                            action={guidance.proofflowAction.route}
+                            method="POST"
+                            className="pt-1"
+                          >
+                            <button
+                              type="submit"
+                              className="rounded bg-foreground px-3 py-1 text-xs font-medium text-background transition-colors hover:bg-foreground/90"
+                            >
+                              {guidance.proofflowAction.label}
+                            </button>
+                          </form>
+                        )}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
