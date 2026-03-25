@@ -153,7 +153,12 @@ export default async function ExportsPage() {
           &larr; Dashboard
         </Link>
         <h1 className="text-2xl font-bold">Exports</h1>
-        <div />
+        <Link
+          href="/timeline"
+          className="text-sm text-foreground/40 hover:text-foreground/60"
+        >
+          Timeline &rarr;
+        </Link>
       </div>
 
       {!schemaReady ? (

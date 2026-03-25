@@ -989,6 +989,12 @@ function OrgReviewCard({ snapshot }: { snapshot: NonNullable<Snapshot> }) {
           >
             View export history &rarr;
           </Link>
+          <Link
+            href="/timeline"
+            className="text-xs text-foreground/40 hover:text-foreground/60"
+          >
+            View timeline &rarr;
+          </Link>
         </div>
       )}
 
