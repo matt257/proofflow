@@ -432,7 +432,7 @@ export default async function Dashboard() {
                 </form>
               )
             ) : (
-              <UpgradeCTA feature="Recurring schedules" />
+              <UpgradeCTA feature="Recurring evidence collection is a Pro feature." description="Upgrade to keep controls fresh automatically with scheduled reviews." />
             )}
 
             {latestOrgSnapshot ? (
@@ -486,7 +486,7 @@ export default async function Dashboard() {
                 </div>
               </>
             ) : (
-              <UpgradeCTA feature="Auditor sharing and PDF reports" />
+              <UpgradeCTA feature="Auditor sharing and PDF reports are Pro features." description="Upgrade to generate PDF audit reports and send auditors a secure read-only view." />
             )}
           </section>
 
@@ -526,7 +526,7 @@ export default async function Dashboard() {
                 </p>
               </>
             ) : (
-              <UpgradeCTA feature="Email notifications" />
+              <UpgradeCTA feature="Email notifications are a Pro feature." description="Upgrade to get alerted when controls go stale or evidence is auto-refreshed." />
             )}
           </section>
 
@@ -615,17 +615,20 @@ function normalizeSnapshotData(data: Record<string, unknown>) {
 // Components
 // ---------------------------------------------------------------------------
 
-function UpgradeCTA({ feature }: { feature: string }) {
+function UpgradeCTA({ feature, description }: { feature: string; description?: string }) {
   return (
     <div className="rounded-lg border border-dashed border-foreground/20 px-4 py-3">
-      <p className="text-sm text-foreground/40">
-        {feature} — available on Pro.
+      <p className="text-sm font-medium text-foreground/50">
+        {feature}
       </p>
+      {description && (
+        <p className="mt-0.5 text-xs text-foreground/40">{description}</p>
+      )}
       <Link
         href="/pricing"
-        className="mt-1 inline-block text-xs font-medium text-foreground/60 hover:text-foreground/80"
+        className="mt-2 inline-block rounded bg-foreground px-3 py-1 text-xs font-medium text-background transition-colors hover:bg-foreground/90"
       >
-        Upgrade to Pro &rarr;
+        Upgrade to Pro
       </Link>
     </div>
   );
