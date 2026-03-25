@@ -1,8 +1,8 @@
 import { db } from "@/lib/db";
 import {
   fetchGitHubAccessReview,
-  fetchGitHubOrgAccessReview,
 } from "@/lib/github-api";
+import { collectOrgAccessReview } from "@/lib/collect-org-review";
 import {
   analyzeOrgAccessReview,
   highestSeverity,
@@ -122,6 +122,17 @@ async function getDashboardData() {
       // coverage computation is best-effort
     }
 
+    type ScheduleInfo = { frequency: string; nextRunAt: Date; lastRunAt: Date | null } | null;
+    let schedule: ScheduleInfo = null;
+    try {
+      schedule = await db.schedule.findFirst({
+        where: { type: "github_org_access_review" },
+        select: { frequency: true, nextRunAt: true, lastRunAt: true },
+      });
+    } catch {
+      // best-effort
+    }
+
     return {
       schemaReady: true as const,
       integration,
@@ -129,6 +140,7 @@ async function getDashboardData() {
       latestOrgSnapshot,
       history,
       coverage,
+      schedule,
     };
   } catch (e: unknown) {
     if (isPrismaTableMissing(e)) {
@@ -139,6 +151,7 @@ async function getDashboardData() {
         latestOrgSnapshot: null,
         history: [],
         coverage: null,
+        schedule: null,
       };
     }
     throw e;
@@ -187,39 +200,36 @@ async function collectEvidence() {
 async function collectOrgEvidence() {
   "use server";
 
-  const integration = await db.integration.findFirst({
-    where: { provider: "github" },
-    select: { id: true, workspaceId: true, accessToken: true },
-  });
-
-  if (!integration?.accessToken) {
-    redirect("/dashboard");
-  }
-
   try {
-    const data = await fetchGitHubOrgAccessReview(integration.accessToken);
-    const snapshot = await db.evidenceSnapshot.create({
-      data: {
-        workspaceId: integration.workspaceId,
-        integrationId: integration.id,
-        type: "github_org_access_review",
-        status: "succeeded",
-        data: JSON.parse(JSON.stringify(data)),
-      },
-    });
-    await mapSnapshotToControls(snapshot.id);
-  } catch (e) {
-    const message = e instanceof Error ? e.message : "Unknown error";
-    await db.evidenceSnapshot.create({
-      data: {
-        workspaceId: integration.workspaceId,
-        integrationId: integration.id,
-        type: "github_org_access_review",
-        status: "failed",
-        data: { error: message },
-      },
+    await collectOrgAccessReview();
+  } catch {
+    // error already persisted as a failed snapshot
+  }
+
+  redirect("/dashboard");
+}
+
+async function enableSchedule() {
+  "use server";
+
+  let workspace = await db.workspace.findFirst();
+  if (!workspace) {
+    workspace = await db.workspace.create({
+      data: { name: "Default Workspace" },
     });
   }
+
+  const type = "github_org_access_review";
+  await db.schedule.upsert({
+    where: { workspaceId_type: { workspaceId: workspace.id, type } },
+    create: {
+      workspaceId: workspace.id,
+      type,
+      frequency: "monthly",
+      nextRunAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    },
+    update: {},
+  });
 
   redirect("/dashboard");
 }
@@ -236,6 +246,7 @@ export default async function Dashboard() {
     latestOrgSnapshot,
     history,
     coverage,
+    schedule,
   } = await getDashboardData();
   const meta = integration?.metadata as Record<string, string> | null;
 
@@ -307,6 +318,33 @@ export default async function Dashboard() {
                 </button>
               </form>
             </div>
+
+            {/* Schedule status */}
+            {schedule ? (
+              <div className="flex items-center justify-between rounded-lg border border-foreground/10 px-4 py-3 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />
+                  <span className="text-foreground/60">
+                    Monthly access review enabled
+                  </span>
+                </div>
+                <span className="text-xs text-foreground/40">
+                  Next run: {schedule.nextRunAt.toLocaleDateString()}
+                  {schedule.lastRunAt && (
+                    <> &middot; Last: {schedule.lastRunAt.toLocaleDateString()}</>
+                  )}
+                </span>
+              </div>
+            ) : (
+              <form action={enableSchedule}>
+                <button
+                  type="submit"
+                  className="w-full rounded-lg border border-dashed border-foreground/20 px-4 py-3 text-sm text-foreground/50 transition-colors hover:border-foreground/40 hover:text-foreground/70"
+                >
+                  Enable monthly access reviews
+                </button>
+              </form>
+            )}
 
             {latestOrgSnapshot ? (
               <OrgReviewCard snapshot={latestOrgSnapshot} />

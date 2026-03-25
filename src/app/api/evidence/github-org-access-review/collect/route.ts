@@ -1,50 +1,12 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { fetchGitHubOrgAccessReview } from "@/lib/github-api";
-import { mapSnapshotToControls } from "@/lib/controls";
+import { collectOrgAccessReview } from "@/lib/collect-org-review";
 
 export async function POST() {
-  const integration = await db.integration.findFirst({
-    where: { provider: "github" },
-    select: { id: true, workspaceId: true, accessToken: true },
-  });
-
-  if (!integration || !integration.accessToken) {
-    return NextResponse.json(
-      { error: "No GitHub integration found. Connect GitHub first." },
-      { status: 400 },
-    );
-  }
-
   try {
-    const data = await fetchGitHubOrgAccessReview(integration.accessToken);
-
-    const snapshot = await db.evidenceSnapshot.create({
-      data: {
-        workspaceId: integration.workspaceId,
-        integrationId: integration.id,
-        type: "github_org_access_review",
-        status: "succeeded",
-        data: JSON.parse(JSON.stringify(data)),
-      },
-    });
-
-    await mapSnapshotToControls(snapshot.id);
-
+    const snapshot = await collectOrgAccessReview();
     return NextResponse.json({ snapshot });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";
-
-    const snapshot = await db.evidenceSnapshot.create({
-      data: {
-        workspaceId: integration.workspaceId,
-        integrationId: integration.id,
-        type: "github_org_access_review",
-        status: "failed",
-        data: { error: message },
-      },
-    });
-
-    return NextResponse.json({ snapshot, error: message }, { status: 502 });
+    return NextResponse.json({ error: message }, { status: 502 });
   }
 }

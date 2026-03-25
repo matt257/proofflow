@@ -14,6 +14,21 @@ model Workspace {
   integrations      Integration[]
   evidenceSnapshots EvidenceSnapshot[]
   exports           Export[]
+  schedules         Schedule[]
+}
+
+model Schedule {
+  id          String    @id @default(cuid())
+  workspaceId String
+  type        String
+  frequency   String
+  lastRunAt   DateTime?
+  nextRunAt   DateTime
+  createdAt   DateTime  @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@unique([workspaceId, type])
 }
 
 model Integration {
