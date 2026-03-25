@@ -29,6 +29,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { RunSchedulesButton } from "./run-schedules-button";
 import { ShareLinkButton } from "./share-link-button";
+import { EvidenceUploadForm } from "./evidence-upload-form";
 
 export const dynamic = "force-dynamic";
 
@@ -927,7 +928,7 @@ function CoveredCard({ control: c }: { control: ControlStatus }) {
             <p className="text-xs italic text-foreground/40">{guidance.purpose}</p>
           )}
           <p className="text-xs text-green-700 dark:text-green-400">
-            Covered — recent {guidance?.evidenceSource ?? "evidence"} was collected
+            Covered — {c.source === "upload" ? "manual evidence uploaded" : `recent ${guidance?.evidenceSource ?? "evidence"} was collected`}
             {c.lastCollectedAt && (
               <> on {c.lastCollectedAt.toLocaleDateString()}</>
             )}
@@ -935,7 +936,7 @@ function CoveredCard({ control: c }: { control: ControlStatus }) {
           </p>
           {guidance && (
             <p className="text-xs text-foreground/30">
-              Evidence: {guidance.evidenceSource}
+              Evidence: {c.source === "upload" ? "Manual upload" : guidance.evidenceSource}
             </p>
           )}
           {autoRefreshed && (
@@ -1048,6 +1049,7 @@ function MissingCard({ control: c }: { control: ControlStatus }) {
               </div>
             </>
           )}
+          <EvidenceUploadForm controlCode={c.code} />
         </div>
       </div>
     </div>

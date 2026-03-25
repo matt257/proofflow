@@ -204,6 +204,29 @@ export async function generateAuditPDF(): Promise<Buffer> {
     doc.fontSize(11).font("Helvetica").text("No organization access review evidence available.");
   }
 
+  // Manual uploads
+  let manualUploads: { controlCode: string; title: string; content: string; createdAt: Date }[] = [];
+  try {
+    manualUploads = await db.evidenceUpload.findMany({
+      orderBy: { createdAt: "desc" },
+      select: { controlCode: true, title: true, content: true, createdAt: true },
+    });
+  } catch {
+    // table may not exist
+  }
+
+  if (manualUploads.length > 0) {
+    doc.moveDown(1);
+    doc.fontSize(12).font("Helvetica-Bold").text("Manual Evidence Uploads");
+    doc.moveDown(0.3);
+    doc.fontSize(9).font("Helvetica");
+    for (const u of manualUploads) {
+      doc.font("Helvetica-Bold").text(`${u.controlCode} — ${u.title} (${u.createdAt.toLocaleDateString()})`);
+      doc.font("Helvetica").fillColor(COLOR_GRAY).text(u.content.slice(0, 500));
+      doc.fillColor("#000000").moveDown(0.3);
+    }
+  }
+
   // -----------------------------------------------------------------------
   // Risk Findings
   // -----------------------------------------------------------------------

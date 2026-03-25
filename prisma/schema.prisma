@@ -21,6 +21,7 @@ model Workspace {
   schedules               Schedule[]
   notificationPreferences NotificationPreference[]
   shareLinks              ShareLink[]
+  evidenceUploads         EvidenceUpload[]
 }
 
 model ShareLink {
@@ -115,6 +116,18 @@ model NotificationPreference {
   workspace Workspace @relation(fields: [workspaceId], references: [id])
 
   @@unique([workspaceId, email])
+}
+
+model EvidenceUpload {
+  id          String   @id @default(cuid())
+  workspaceId String
+  controlCode String
+  title       String
+  content     String
+  fileName    String?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
 }
 
 model Export {

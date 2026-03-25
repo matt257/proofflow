@@ -33,6 +33,7 @@ export type ControlStatus = {
   stale: boolean;
   ageDays: number | null;
   lastCollectedAt: Date | null;
+  source?: "snapshot" | "upload";
 };
 
 export type CoverageSummary = {
@@ -80,12 +81,50 @@ export async function getControlCoverage(): Promise<CoverageResult> {
     orderBy: { code: "asc" },
   });
 
+  // Fetch latest manual upload per control code
+  let uploads: { controlCode: string; createdAt: Date }[] = [];
+  try {
+    uploads = await db.evidenceUpload.findMany({
+      orderBy: { createdAt: "desc" },
+      select: { controlCode: true, createdAt: true },
+    });
+  } catch {
+    // table may not exist yet
+  }
+  const latestUploadByCode = new Map<string, Date>();
+  for (const u of uploads) {
+    if (!latestUploadByCode.has(u.controlCode)) {
+      latestUploadByCode.set(u.controlCode, u.createdAt);
+    }
+  }
+
   const now = Date.now();
 
   const controls: ControlStatus[] = allControls.map((c) => {
     const latestMapping = c.mappings[0];
+    const snapshotDate = latestMapping?.snapshot.collectedAt ?? null;
+    const uploadDate = latestUploadByCode.get(c.code) ?? null;
 
-    if (!latestMapping) {
+    // Pick the most recent evidence date
+    let collectedAt: Date | null = null;
+    let source: "snapshot" | "upload" | undefined;
+    if (snapshotDate && uploadDate) {
+      if (snapshotDate >= uploadDate) {
+        collectedAt = snapshotDate;
+        source = "snapshot";
+      } else {
+        collectedAt = uploadDate;
+        source = "upload";
+      }
+    } else if (snapshotDate) {
+      collectedAt = snapshotDate;
+      source = "snapshot";
+    } else if (uploadDate) {
+      collectedAt = uploadDate;
+      source = "upload";
+    }
+
+    if (!collectedAt) {
       return {
         framework: c.framework,
         code: c.code,
@@ -99,7 +138,6 @@ export async function getControlCoverage(): Promise<CoverageResult> {
       };
     }
 
-    const collectedAt = latestMapping.snapshot.collectedAt;
     const ageDays = Math.floor(
       (now - collectedAt.getTime()) / (1000 * 60 * 60 * 24),
     );
@@ -116,6 +154,7 @@ export async function getControlCoverage(): Promise<CoverageResult> {
       stale: isStale,
       ageDays,
       lastCollectedAt: collectedAt,
+      source,
     };
   });
 
