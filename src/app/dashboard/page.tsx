@@ -654,7 +654,7 @@ function OrgReviewCard({ snapshot }: { snapshot: NonNullable<Snapshot> }) {
       )}
 
       {snapshot.status === "succeeded" && (
-        <div className="flex gap-3">
+        <div className="flex items-center gap-3">
           <a
             href="/api/evidence/github-org-access-review/pack"
             className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:bg-foreground/90"
@@ -667,6 +667,12 @@ function OrgReviewCard({ snapshot }: { snapshot: NonNullable<Snapshot> }) {
           >
             Download CSV
           </a>
+          <Link
+            href="/exports"
+            className="text-xs text-foreground/40 hover:text-foreground/60"
+          >
+            View export history &rarr;
+          </Link>
         </div>
       )}
 

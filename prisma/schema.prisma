@@ -13,6 +13,7 @@ model Workspace {
   createdAt         DateTime           @default(now())
   integrations      Integration[]
   evidenceSnapshots EvidenceSnapshot[]
+  exports           Export[]
 }
 
 model Integration {
@@ -42,4 +43,20 @@ model EvidenceSnapshot {
 
   workspace   Workspace   @relation(fields: [workspaceId], references: [id])
   integration Integration @relation(fields: [integrationId], references: [id])
+  exports     Export[]
+}
+
+model Export {
+  id          String    @id @default(cuid())
+  workspaceId String
+  snapshotId  String?
+  type        String
+  status      String
+  fileName    String?
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+  metadata    Json?
+
+  workspace Workspace         @relation(fields: [workspaceId], references: [id])
+  snapshot  EvidenceSnapshot? @relation(fields: [snapshotId], references: [id])
 }
