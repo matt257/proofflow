@@ -10,6 +10,10 @@ datasource db {
 model Workspace {
   id                      String                   @id @default(cuid())
   name                    String
+  plan                    String                   @default("free")
+  stripeCustomerId        String?
+  stripeSubscriptionId    String?
+  subscriptionStatus      String?
   createdAt               DateTime                 @default(now())
   integrations            Integration[]
   evidenceSnapshots       EvidenceSnapshot[]

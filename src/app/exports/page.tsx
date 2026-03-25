@@ -9,6 +9,7 @@ import { getControlCoverage } from "@/lib/control-coverage";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import JSZip from "jszip";
+import { getWorkspacePlan, hasFeature } from "@/lib/plan";
 
 export const dynamic = "force-dynamic";
 
@@ -142,6 +143,7 @@ async function generateExport() {
 
 export default async function ExportsPage() {
   const { schemaReady, exports, coverageSummary } = await getExports();
+  const plan = await getWorkspacePlan();
 
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-8 p-8">
@@ -161,7 +163,19 @@ export default async function ExportsPage() {
         </Link>
       </div>
 
-      {!schemaReady ? (
+      {!hasFeature(plan, "export_history") ? (
+        <div className="rounded-lg border border-dashed border-foreground/20 px-6 py-8 text-center">
+          <p className="text-sm text-foreground/40">
+            Export history is available on the Pro plan.
+          </p>
+          <Link
+            href="/pricing"
+            className="mt-2 inline-block text-sm font-medium text-foreground/60 hover:text-foreground/80"
+          >
+            Upgrade to Pro &rarr;
+          </Link>
+        </div>
+      ) : !schemaReady ? (
         <div className="rounded-lg border border-yellow-400/30 bg-yellow-50 px-6 py-4 text-center dark:bg-yellow-950/20">
           <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
             Database schema is not initialized for this environment yet.

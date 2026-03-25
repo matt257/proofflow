@@ -24,6 +24,7 @@ import {
   computeAuditReadiness,
   type AuditReadiness,
 } from "@/lib/audit-readiness";
+import { hasFeature, type Plan } from "@/lib/plan";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { RunSchedulesButton } from "./run-schedules-button";
@@ -152,6 +153,14 @@ async function getDashboardData() {
       // best-effort
     }
 
+    let plan: Plan = "free";
+    try {
+      const ws = await db.workspace.findFirst({ select: { plan: true } });
+      plan = (ws?.plan as Plan) ?? "free";
+    } catch {
+      // best-effort
+    }
+
     return {
       schemaReady: true as const,
       integration,
@@ -161,6 +170,7 @@ async function getDashboardData() {
       coverage,
       schedule,
       notificationEmail,
+      plan,
     };
   } catch (e: unknown) {
     if (isPrismaTableMissing(e)) {
@@ -173,6 +183,7 @@ async function getDashboardData() {
         coverage: null,
         schedule: null,
         notificationEmail: null,
+        plan: "free" as Plan,
       };
     }
     throw e;
@@ -302,6 +313,7 @@ export default async function Dashboard() {
     coverage,
     schedule,
     notificationEmail,
+    plan,
   } = await getDashboardData();
   const meta = integration?.metadata as Record<string, string> | null;
 
@@ -379,44 +391,48 @@ export default async function Dashboard() {
             </div>
 
             {/* Schedule status */}
-            {schedule ? (
-              <div className="rounded-lg border border-foreground/10 px-4 py-3 text-sm">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />
-                    <span className="text-foreground/60">
-                      Monthly access review enabled
-                    </span>
-                  </div>
-                  <RunSchedulesButton />
-                </div>
-                <div className="mt-2 space-y-1 text-xs text-foreground/40">
-                  <div>Next run: {schedule.nextRunAt.toLocaleDateString()}</div>
-                  {schedule.lastRunAt && (
-                    <div className="flex items-center gap-1.5">
-                      Last run: {schedule.lastRunAt.toLocaleDateString()}
-                      {schedule.lastStatus === "succeeded" && (
-                        <span className="font-medium text-green-600">— succeeded</span>
-                      )}
-                      {schedule.lastStatus === "failed" && (
-                        <span className="font-medium text-red-500">— failed</span>
-                      )}
+            {hasFeature(plan, "schedules") ? (
+              schedule ? (
+                <div className="rounded-lg border border-foreground/10 px-4 py-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />
+                      <span className="text-foreground/60">
+                        Monthly access review enabled
+                      </span>
                     </div>
-                  )}
-                  {schedule.lastStatus === "failed" && schedule.lastError && (
-                    <div className="text-red-400">{schedule.lastError}</div>
-                  )}
+                    <RunSchedulesButton />
+                  </div>
+                  <div className="mt-2 space-y-1 text-xs text-foreground/40">
+                    <div>Next run: {schedule.nextRunAt.toLocaleDateString()}</div>
+                    {schedule.lastRunAt && (
+                      <div className="flex items-center gap-1.5">
+                        Last run: {schedule.lastRunAt.toLocaleDateString()}
+                        {schedule.lastStatus === "succeeded" && (
+                          <span className="font-medium text-green-600">— succeeded</span>
+                        )}
+                        {schedule.lastStatus === "failed" && (
+                          <span className="font-medium text-red-500">— failed</span>
+                        )}
+                      </div>
+                    )}
+                    {schedule.lastStatus === "failed" && schedule.lastError && (
+                      <div className="text-red-400">{schedule.lastError}</div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <form action={enableSchedule}>
+                  <button
+                    type="submit"
+                    className="w-full rounded-lg border border-dashed border-foreground/20 px-4 py-3 text-sm text-foreground/50 transition-colors hover:border-foreground/40 hover:text-foreground/70"
+                  >
+                    Enable monthly access reviews
+                  </button>
+                </form>
+              )
             ) : (
-              <form action={enableSchedule}>
-                <button
-                  type="submit"
-                  className="w-full rounded-lg border border-dashed border-foreground/20 px-4 py-3 text-sm text-foreground/50 transition-colors hover:border-foreground/40 hover:text-foreground/70"
-                >
-                  Enable monthly access reviews
-                </button>
-              </form>
+              <UpgradeCTA feature="Recurring schedules" />
             )}
 
             {latestOrgSnapshot ? (
@@ -454,18 +470,24 @@ export default async function Dashboard() {
             <h3 className="text-sm font-semibold text-foreground/60">
               Auditor Sharing
             </h3>
-            <p className="text-xs text-foreground/30">
-              Share compliance status with auditors via a read-only link or downloadable PDF report.
-            </p>
-            <div className="flex flex-wrap gap-3">
-              <ShareLinkButton />
-              <a
-                href="/api/export/pdf"
-                className="rounded-lg border border-foreground/20 px-4 py-2 text-sm font-medium transition-colors hover:bg-foreground/5"
-              >
-                Download PDF Report
-              </a>
-            </div>
+            {hasFeature(plan, "auditor_share") ? (
+              <>
+                <p className="text-xs text-foreground/30">
+                  Share compliance status with auditors via a read-only link or downloadable PDF report.
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  <ShareLinkButton />
+                  <a
+                    href="/api/export/pdf"
+                    className="rounded-lg border border-foreground/20 px-4 py-2 text-sm font-medium transition-colors hover:bg-foreground/5"
+                  >
+                    Download PDF Report
+                  </a>
+                </div>
+              </>
+            ) : (
+              <UpgradeCTA feature="Auditor sharing and PDF reports" />
+            )}
           </section>
 
           {/* Notifications */}
@@ -473,33 +495,60 @@ export default async function Dashboard() {
             <h3 className="text-sm font-semibold text-foreground/60">
               Notifications
             </h3>
-            {notificationEmail ? (
-              <div className="flex items-center gap-2 rounded-lg border border-foreground/10 px-4 py-3 text-sm">
-                <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
-                <span className="text-foreground/60">
-                  Alerts enabled for: <span className="font-medium">{notificationEmail}</span>
-                </span>
-              </div>
+            {hasFeature(plan, "notifications") ? (
+              <>
+                {notificationEmail ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-foreground/10 px-4 py-3 text-sm">
+                    <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
+                    <span className="text-foreground/60">
+                      Alerts enabled for: <span className="font-medium">{notificationEmail}</span>
+                    </span>
+                  </div>
+                ) : (
+                  <form action={enableNotifications} className="flex gap-2">
+                    <input
+                      type="email"
+                      name="email"
+                      placeholder="you@company.com"
+                      required
+                      className="flex-1 rounded-lg border border-foreground/20 bg-transparent px-3 py-2 text-sm placeholder:text-foreground/30 focus:border-foreground/40 focus:outline-none"
+                    />
+                    <button
+                      type="submit"
+                      className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:bg-foreground/90"
+                    >
+                      Enable alerts
+                    </button>
+                  </form>
+                )}
+                <p className="text-xs text-foreground/30">
+                  Receive email alerts when controls become stale or evidence is auto-refreshed.
+                </p>
+              </>
             ) : (
-              <form action={enableNotifications} className="flex gap-2">
-                <input
-                  type="email"
-                  name="email"
-                  placeholder="you@company.com"
-                  required
-                  className="flex-1 rounded-lg border border-foreground/20 bg-transparent px-3 py-2 text-sm placeholder:text-foreground/30 focus:border-foreground/40 focus:outline-none"
-                />
-                <button
-                  type="submit"
-                  className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:bg-foreground/90"
-                >
-                  Enable alerts
-                </button>
-              </form>
+              <UpgradeCTA feature="Email notifications" />
             )}
-            <p className="text-xs text-foreground/30">
-              Receive email alerts when controls become stale or evidence is auto-refreshed.
-            </p>
+          </section>
+
+          {/* Billing */}
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold text-foreground/60">
+              Plan
+            </h3>
+            <div className="flex items-center justify-between rounded-lg border border-foreground/10 px-4 py-3 text-sm">
+              <div className="flex items-center gap-2">
+                <span className={`inline-block h-2 w-2 rounded-full ${plan === "pro" ? "bg-green-500" : "bg-foreground/30"}`} />
+                <span className="font-medium capitalize">{plan}</span>
+              </div>
+              {plan === "free" && (
+                <Link
+                  href="/pricing"
+                  className="text-xs text-foreground/50 hover:text-foreground/70"
+                >
+                  Upgrade &rarr;
+                </Link>
+              )}
+            </div>
           </section>
         </>
       )}
@@ -565,6 +614,22 @@ function normalizeSnapshotData(data: Record<string, unknown>) {
 // ---------------------------------------------------------------------------
 // Components
 // ---------------------------------------------------------------------------
+
+function UpgradeCTA({ feature }: { feature: string }) {
+  return (
+    <div className="rounded-lg border border-dashed border-foreground/20 px-4 py-3">
+      <p className="text-sm text-foreground/40">
+        {feature} — available on Pro.
+      </p>
+      <Link
+        href="/pricing"
+        className="mt-1 inline-block text-xs font-medium text-foreground/60 hover:text-foreground/80"
+      >
+        Upgrade to Pro &rarr;
+      </Link>
+    </div>
+  );
+}
 
 function SchemaNotReady() {
   return (
