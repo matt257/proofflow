@@ -455,9 +455,17 @@ export default async function Dashboard() {
               Auditor Sharing
             </h3>
             <p className="text-xs text-foreground/30">
-              Generate a read-only link to share compliance status with auditors. Links expire after 7 days.
+              Share compliance status with auditors via a read-only link or downloadable PDF report.
             </p>
-            <ShareLinkButton />
+            <div className="flex flex-wrap gap-3">
+              <ShareLinkButton />
+              <a
+                href="/api/export/pdf"
+                className="rounded-lg border border-foreground/20 px-4 py-2 text-sm font-medium transition-colors hover:bg-foreground/5"
+              >
+                Download PDF Report
+              </a>
+            </div>
           </section>
 
           {/* Notifications */}
