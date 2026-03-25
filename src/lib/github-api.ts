@@ -137,3 +137,91 @@ export async function fetchGitHubAccessReview(
 
   return { user, orgs, collectorVersion: 2 };
 }
+
+// ---------------------------------------------------------------------------
+// Org-wide access review (v3) — all members of each org
+// ---------------------------------------------------------------------------
+
+export type OrgMember = {
+  login: string;
+  id: number;
+  type: string;
+  site_admin: boolean;
+  role: "admin" | "member";
+};
+
+export type OrgMembershipEntry = {
+  org: GitHubOrg;
+  members: OrgMember[];
+  errors: string[];
+};
+
+export type OrgAccessReviewSnapshot = {
+  orgs: OrgMembershipEntry[];
+  collectorVersion: number;
+};
+
+type GitHubMemberItem = {
+  login: string;
+  id: number;
+  type: string;
+  site_admin: boolean;
+};
+
+export async function fetchGitHubOrgAccessReview(
+  token: string,
+): Promise<OrgAccessReviewSnapshot> {
+  // 1. Org list
+  let rawOrgs: GitHubOrg[] = [];
+  try {
+    rawOrgs = await githubFetch<GitHubOrg[]>("/user/orgs", token);
+  } catch {
+    // continue with empty
+  }
+
+  // 2. Per-org: all members + admin filter
+  const orgs: OrgMembershipEntry[] = await Promise.all(
+    rawOrgs.map(async (org) => {
+      const errors: string[] = [];
+
+      // Fetch all members
+      const allMembers = await githubFetchOptional<GitHubMemberItem[]>(
+        `/orgs/${org.login}/members`,
+        token,
+      );
+      if (!allMembers) {
+        errors.push(
+          "Could not list org members (may require org:read or admin:org scope)",
+        );
+        return { org, members: [], errors };
+      }
+
+      // Fetch admin-only list to determine roles
+      const adminMembers = await githubFetchOptional<GitHubMemberItem[]>(
+        `/orgs/${org.login}/members?role=admin`,
+        token,
+      );
+      const adminLogins = new Set(
+        adminMembers ? adminMembers.map((m) => m.login) : [],
+      );
+
+      if (!adminMembers) {
+        errors.push(
+          "Could not fetch admin list — all users marked as 'member'",
+        );
+      }
+
+      const members: OrgMember[] = allMembers.map((m) => ({
+        login: m.login,
+        id: m.id,
+        type: m.type,
+        site_admin: m.site_admin,
+        role: adminLogins.has(m.login) ? "admin" : "member",
+      }));
+
+      return { org, members, errors };
+    }),
+  );
+
+  return { orgs, collectorVersion: 3 };
+}

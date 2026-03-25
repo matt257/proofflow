@@ -1,5 +1,8 @@
 import { db } from "@/lib/db";
-import { fetchGitHubAccessReview } from "@/lib/github-api";
+import {
+  fetchGitHubAccessReview,
+  fetchGitHubOrgAccessReview,
+} from "@/lib/github-api";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
@@ -49,6 +52,7 @@ async function getDashboardData() {
 
     let latestSnapshot: Snapshot = null;
     let history: SnapshotSummary[] = [];
+    let latestOrgSnapshot: Snapshot = null;
 
     if (integration) {
       try {
@@ -67,10 +71,25 @@ async function getDashboardData() {
           },
         });
 
+        latestOrgSnapshot = await db.evidenceSnapshot.findFirst({
+          where: {
+            integrationId: integration.id,
+            type: "github_org_access_review",
+          },
+          orderBy: { collectedAt: "desc" },
+          select: {
+            id: true,
+            status: true,
+            type: true,
+            collectedAt: true,
+            data: true,
+          },
+        });
+
         history = await db.evidenceSnapshot.findMany({
           where: {
             integrationId: integration.id,
-            type: "github_access_review",
+            type: { in: ["github_access_review", "github_org_access_review"] },
           },
           orderBy: { collectedAt: "desc" },
           take: 10,
@@ -85,6 +104,7 @@ async function getDashboardData() {
       schemaReady: true as const,
       integration,
       latestSnapshot,
+      latestOrgSnapshot,
       history,
     };
   } catch (e: unknown) {
@@ -93,6 +113,7 @@ async function getDashboardData() {
         schemaReady: false as const,
         integration: null,
         latestSnapshot: null,
+        latestOrgSnapshot: null,
         history: [],
       };
     }
@@ -139,12 +160,51 @@ async function collectEvidence() {
   redirect("/dashboard");
 }
 
+async function collectOrgEvidence() {
+  "use server";
+
+  const integration = await db.integration.findFirst({
+    where: { provider: "github" },
+    select: { id: true, workspaceId: true, accessToken: true },
+  });
+
+  if (!integration?.accessToken) {
+    redirect("/dashboard");
+  }
+
+  try {
+    const data = await fetchGitHubOrgAccessReview(integration.accessToken);
+    await db.evidenceSnapshot.create({
+      data: {
+        workspaceId: integration.workspaceId,
+        integrationId: integration.id,
+        type: "github_org_access_review",
+        status: "succeeded",
+        data: JSON.parse(JSON.stringify(data)),
+      },
+    });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Unknown error";
+    await db.evidenceSnapshot.create({
+      data: {
+        workspaceId: integration.workspaceId,
+        integrationId: integration.id,
+        type: "github_org_access_review",
+        status: "failed",
+        data: { error: message },
+      },
+    });
+  }
+
+  redirect("/dashboard");
+}
+
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
 export default async function Dashboard() {
-  const { schemaReady, integration, latestSnapshot, history } =
+  const { schemaReady, integration, latestSnapshot, latestOrgSnapshot, history } =
     await getDashboardData();
   const meta = integration?.metadata as Record<string, string> | null;
 
@@ -190,6 +250,31 @@ export default async function Dashboard() {
               <div className="rounded-lg border border-foreground/10 p-6 text-center text-sm text-foreground/40">
                 No evidence collected yet. Click &ldquo;Collect Now&rdquo; to
                 take your first snapshot.
+              </div>
+            )}
+          </section>
+
+          {/* Org-wide access review */}
+          <section className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">
+                Organization Access Review
+              </h2>
+              <form action={collectOrgEvidence}>
+                <button
+                  type="submit"
+                  className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:bg-foreground/90"
+                >
+                  Collect Org Members
+                </button>
+              </form>
+            </div>
+
+            {latestOrgSnapshot ? (
+              <OrgReviewCard snapshot={latestOrgSnapshot} />
+            ) : (
+              <div className="rounded-lg border border-foreground/10 p-6 text-center text-sm text-foreground/40">
+                No organization member data collected yet.
               </div>
             )}
           </section>
@@ -527,6 +612,147 @@ function OrgCard({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function OrgReviewCard({ snapshot }: { snapshot: NonNullable<Snapshot> }) {
+  const data = (snapshot.data ?? {}) as Record<string, unknown>;
+
+  return (
+    <div className="space-y-5 rounded-lg border border-foreground/10 p-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold">
+            Latest Org Member Inventory
+          </h3>
+          <time className="text-xs text-foreground/40">
+            Collected {snapshot.collectedAt.toLocaleString()}
+          </time>
+        </div>
+        <StatusBadge status={snapshot.status} />
+      </div>
+
+      {snapshot.status === "succeeded" ? (
+        <OrgReviewEvidence data={data} />
+      ) : (
+        <FailedEvidence data={data} />
+      )}
+
+      {snapshot.status === "succeeded" && (
+        <div className="flex gap-3">
+          <a
+            href="/api/evidence/github-org-access-review/export"
+            className="rounded-lg border border-foreground/10 px-4 py-2 text-sm font-medium transition-colors hover:bg-foreground/5"
+          >
+            Download CSV
+          </a>
+        </div>
+      )}
+
+      <details className="group">
+        <summary className="cursor-pointer text-xs text-foreground/40 hover:text-foreground/60">
+          Show raw JSON
+        </summary>
+        <pre className="mt-2 max-h-64 overflow-auto rounded bg-foreground/5 p-3 text-xs leading-relaxed">
+          {JSON.stringify(data, null, 2)}
+        </pre>
+      </details>
+    </div>
+  );
+}
+
+function OrgReviewEvidence({ data }: { data: Record<string, unknown> }) {
+  const rawOrgs = Array.isArray(data.orgs) ? data.orgs : [];
+
+  if (rawOrgs.length === 0) {
+    return (
+      <p className="text-sm text-foreground/40">
+        No organizations found.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {(rawOrgs as Record<string, unknown>[]).map((entry, i) => {
+        const org = (entry.org ?? {}) as Record<string, unknown>;
+        const members = Array.isArray(entry.members)
+          ? (entry.members as Record<string, unknown>[])
+          : [];
+        const errors = Array.isArray(entry.errors)
+          ? (entry.errors as string[])
+          : [];
+        const admins = members.filter((m) => m.role === "admin");
+
+        return (
+          <div key={i} className="rounded-lg border border-foreground/10">
+            <div className="flex items-center justify-between border-b border-foreground/5 px-4 py-3">
+              <span className="text-sm font-medium">
+                {str(org.login) ?? "\u2014"}
+              </span>
+              <div className="flex gap-3 text-xs text-foreground/40">
+                <span>{members.length} members</span>
+                <span>{admins.length} admins</span>
+              </div>
+            </div>
+
+            {members.length > 0 && (
+              <div className="overflow-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-foreground/5 text-left text-xs text-foreground/40">
+                      <th className="px-4 py-2 font-medium">Login</th>
+                      <th className="px-4 py-2 font-medium">Role</th>
+                      <th className="px-4 py-2 font-medium">Type</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-foreground/5">
+                    {members.map((m, j) => (
+                      <tr key={j}>
+                        <td className="px-4 py-1.5">{str(m.login) ?? "\u2014"}</td>
+                        <td className="px-4 py-1.5">
+                          <span
+                            className={
+                              m.role === "admin"
+                                ? "rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                                : "text-foreground/50"
+                            }
+                          >
+                            {str(m.role) ?? "\u2014"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-1.5 text-foreground/40">
+                          {str(m.type) ?? "\u2014"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {members.length === 0 && errors.length === 0 && (
+              <div className="px-4 py-3 text-xs text-foreground/30">
+                No members returned.
+              </div>
+            )}
+
+            {errors.length > 0 && (
+              <div className="border-t border-foreground/5 px-4 py-2">
+                {errors.map((err, k) => (
+                  <p
+                    key={k}
+                    className="text-xs text-yellow-600 dark:text-yellow-400"
+                  >
+                    {err}
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
