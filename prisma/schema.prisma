@@ -24,6 +24,8 @@ model Schedule {
   frequency   String
   lastRunAt   DateTime?
   nextRunAt   DateTime
+  lastStatus  String?
+  lastError   String?
   createdAt   DateTime  @default(now())
 
   workspace Workspace @relation(fields: [workspaceId], references: [id])

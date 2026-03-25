@@ -47,6 +47,8 @@ export async function runDueSchedules(): Promise<RunResult[]> {
         data: {
           lastRunAt: now,
           nextRunAt: new Date(now.getTime() + intervalMs),
+          lastStatus: "succeeded",
+          lastError: null,
         },
       });
     } catch (e) {
@@ -60,6 +62,8 @@ export async function runDueSchedules(): Promise<RunResult[]> {
         data: {
           lastRunAt: now,
           nextRunAt: new Date(now.getTime() + intervalMs),
+          lastStatus: "failed",
+          lastError: result.error.slice(0, 500),
         },
       });
     }

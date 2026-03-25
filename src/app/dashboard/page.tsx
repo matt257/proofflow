@@ -20,6 +20,7 @@ import {
 } from "@/lib/control-guidance";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { RunSchedulesButton } from "./run-schedules-button";
 
 export const dynamic = "force-dynamic";
 
@@ -122,12 +123,12 @@ async function getDashboardData() {
       // coverage computation is best-effort
     }
 
-    type ScheduleInfo = { frequency: string; nextRunAt: Date; lastRunAt: Date | null } | null;
+    type ScheduleInfo = { frequency: string; nextRunAt: Date; lastRunAt: Date | null; lastStatus: string | null; lastError: string | null } | null;
     let schedule: ScheduleInfo = null;
     try {
       schedule = await db.schedule.findFirst({
         where: { type: "github_org_access_review" },
-        select: { frequency: true, nextRunAt: true, lastRunAt: true },
+        select: { frequency: true, nextRunAt: true, lastRunAt: true, lastStatus: true, lastError: true },
       });
     } catch {
       // best-effort
@@ -321,19 +322,33 @@ export default async function Dashboard() {
 
             {/* Schedule status */}
             {schedule ? (
-              <div className="flex items-center justify-between rounded-lg border border-foreground/10 px-4 py-3 text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />
-                  <span className="text-foreground/60">
-                    Monthly access review enabled
-                  </span>
+              <div className="rounded-lg border border-foreground/10 px-4 py-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />
+                    <span className="text-foreground/60">
+                      Monthly access review enabled
+                    </span>
+                  </div>
+                  <RunSchedulesButton />
                 </div>
-                <span className="text-xs text-foreground/40">
-                  Next run: {schedule.nextRunAt.toLocaleDateString()}
+                <div className="mt-2 space-y-1 text-xs text-foreground/40">
+                  <div>Next run: {schedule.nextRunAt.toLocaleDateString()}</div>
                   {schedule.lastRunAt && (
-                    <> &middot; Last: {schedule.lastRunAt.toLocaleDateString()}</>
+                    <div className="flex items-center gap-1.5">
+                      Last run: {schedule.lastRunAt.toLocaleDateString()}
+                      {schedule.lastStatus === "succeeded" && (
+                        <span className="font-medium text-green-600">— succeeded</span>
+                      )}
+                      {schedule.lastStatus === "failed" && (
+                        <span className="font-medium text-red-500">— failed</span>
+                      )}
+                    </div>
                   )}
-                </span>
+                  {schedule.lastStatus === "failed" && schedule.lastError && (
+                    <div className="text-red-400">{schedule.lastError}</div>
+                  )}
+                </div>
               </div>
             ) : (
               <form action={enableSchedule}>
