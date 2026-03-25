@@ -929,7 +929,7 @@ function CoverageSection({ coverage }: { coverage: CoverageResult }) {
             <h3 className="text-xs font-semibold uppercase tracking-wide text-green-600">
               Covered ({covered.length})
             </h3>
-            <p className="text-xs text-foreground/30">Evidence is current</p>
+            <p className="text-xs text-foreground/30">Valid evidence on file</p>
           </div>
           {covered.length === 0 ? (
             <p className="text-sm text-foreground/40">None yet</p>
@@ -949,7 +949,7 @@ function CoverageSection({ coverage }: { coverage: CoverageResult }) {
               <h3 className="text-xs font-semibold uppercase tracking-wide text-yellow-600">
                 Stale ({stale.length})
               </h3>
-              <p className="text-xs text-foreground/30">Evidence exists but is out of date</p>
+              <p className="text-xs text-foreground/30">Out of date — may fail audit</p>
             </div>
             <div className="space-y-2">
               {stale.map((c) => (
@@ -966,7 +966,7 @@ function CoverageSection({ coverage }: { coverage: CoverageResult }) {
               <h3 className="text-xs font-semibold uppercase tracking-wide text-red-500">
                 Missing ({missing.length})
               </h3>
-              <p className="text-xs text-foreground/30">No evidence collected yet</p>
+              <p className="text-xs text-foreground/30">Will cause audit failure</p>
             </div>
             <div className="space-y-2">
               {missing.map((c) => (
@@ -1127,33 +1127,31 @@ function MissingCard({ control: c }: { control: ControlStatus }) {
 }
 
 const READINESS_STYLES: Record<string, { border: string; bg: string; dot: string; title: string; titleColor: string }> = {
-  ready: {
+  pass: {
     border: "border-green-200 dark:border-green-900/30",
     bg: "bg-green-50 dark:bg-green-900/10",
     dot: "bg-green-500",
-    title: "Audit Ready",
+    title: "PASS — You are audit-ready",
     titleColor: "text-green-700 dark:text-green-400",
   },
   at_risk: {
     border: "border-yellow-300 dark:border-yellow-900/30",
     bg: "bg-yellow-50 dark:bg-yellow-900/10",
     dot: "bg-yellow-500",
-    title: "At Risk",
+    title: "AT RISK — May fail audit",
     titleColor: "text-yellow-700 dark:text-yellow-400",
   },
-  not_ready: {
+  fail: {
     border: "border-red-200 dark:border-red-900/30",
     bg: "bg-red-50 dark:bg-red-900/10",
     dot: "bg-red-500",
-    title: "Not Audit Ready",
+    title: "FAIL — Not audit-ready",
     titleColor: "text-red-700 dark:text-red-400",
   },
 };
 
 function AuditReadinessBanner({ readiness }: { readiness: AuditReadiness }) {
   const style = READINESS_STYLES[readiness.status]!;
-  const blockingCodes = readiness.blockingControls.map((c) => `${c.framework} ${c.code}`);
-  const staleCodes = readiness.staleControls.map((c) => `${c.framework} ${c.code}`);
 
   return (
     <div className={`rounded-lg border ${style.border} ${style.bg} p-5`}>
@@ -1163,28 +1161,48 @@ function AuditReadinessBanner({ readiness }: { readiness: AuditReadiness }) {
       </div>
       <p className="mt-1.5 text-sm text-foreground/60">{readiness.summary}</p>
 
-      {blockingCodes.length > 0 && (
-        <div className="mt-3">
-          <p className="text-xs font-semibold text-foreground/50">Blocking controls (no evidence):</p>
-          <p className="text-xs text-foreground/40">{blockingCodes.join(", ")}</p>
-        </div>
+      {readiness.stepsRemaining > 0 && (
+        <p className="mt-1 text-xs text-foreground/40">
+          {readiness.stepsRemaining} step{readiness.stepsRemaining > 1 ? "s" : ""} remaining
+          {readiness.estimateMinutes > 0 && <> &middot; ~{readiness.estimateMinutes} min to fix</>}
+        </p>
       )}
 
-      {staleCodes.length > 0 && (
-        <div className="mt-2">
-          <p className="text-xs font-semibold text-foreground/50">Stale controls (evidence expired):</p>
-          <p className="text-xs text-foreground/40">{staleCodes.join(", ")}</p>
-        </div>
-      )}
-
-      {readiness.nextSteps.length > 0 && (
-        <div className="mt-3">
-          <p className="text-xs font-semibold text-foreground/50">Next steps:</p>
-          <ul className="mt-1 list-disc pl-4 text-xs text-foreground/50 space-y-0.5">
-            {readiness.nextSteps.map((s, i) => (
-              <li key={i}>{s}</li>
+      {/* Fix Plan */}
+      {readiness.fixPlan.length > 0 && (
+        <div className="mt-4">
+          <p className="text-xs font-bold text-foreground/60">
+            Fix this to pass your audit
+          </p>
+          <div className="mt-2 space-y-2.5">
+            {readiness.fixPlan.map((item, i) => (
+              <div key={i} className="flex items-start gap-3">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-foreground/10 text-[10px] font-bold text-foreground/50">
+                  {i + 1}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">
+                    {item.title}
+                    <span className="ml-1.5 text-xs font-normal text-foreground/40">({item.control})</span>
+                  </p>
+                  <p className="text-xs text-foreground/40">{item.reason}</p>
+                  {item.route && (
+                    <form action={item.route} method="POST" className="mt-1">
+                      <button
+                        type="submit"
+                        className="rounded bg-foreground px-3 py-1 text-xs font-medium text-background transition-colors hover:bg-foreground/90"
+                      >
+                        {item.action}
+                      </button>
+                    </form>
+                  )}
+                  {!item.route && (
+                    <p className="mt-0.5 text-xs text-foreground/50">{item.action}</p>
+                  )}
+                </div>
+              </div>
             ))}
-          </ul>
+          </div>
         </div>
       )}
     </div>

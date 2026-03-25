@@ -75,10 +75,10 @@ export async function generateAuditPDF(): Promise<Buffer> {
   sectionTitle(doc, "1. Audit Readiness Summary");
 
   const statusLabel =
-    readiness.status === "ready" ? "READY" :
-    readiness.status === "at_risk" ? "AT RISK" : "NOT READY";
+    readiness.status === "pass" ? "PASS" :
+    readiness.status === "at_risk" ? "AT RISK" : "FAIL";
   const statusColor =
-    readiness.status === "ready" ? COLOR_GREEN :
+    readiness.status === "pass" ? COLOR_GREEN :
     readiness.status === "at_risk" ? COLOR_YELLOW : COLOR_RED;
 
   doc.fontSize(18).font("Helvetica-Bold").fillColor(statusColor).text(statusLabel);
@@ -104,12 +104,12 @@ export async function generateAuditPDF(): Promise<Buffer> {
     }
   }
 
-  if (readiness.nextSteps.length > 0) {
+  if (readiness.fixPlan.length > 0) {
     doc.moveDown(0.5);
-    doc.fontSize(10).font("Helvetica-Bold").text("Recommended next steps:");
+    doc.fontSize(10).font("Helvetica-Bold").text("Fix plan:");
     doc.font("Helvetica");
-    for (const s of readiness.nextSteps) {
-      doc.text(`  • ${s}`, { indent: 10 });
+    for (const item of readiness.fixPlan) {
+      doc.text(`  ${item.control}: ${item.title} — ${item.reason}`, { indent: 10 });
     }
   }
 

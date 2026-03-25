@@ -89,7 +89,7 @@ function buildEmail(
     }
     lines.push("");
 
-    if (readiness.status === "ready") {
+    if (readiness.status === "pass") {
       lines.push("All controls now have current evidence.");
     }
 
@@ -97,26 +97,17 @@ function buildEmail(
     return { subject, body: lines.join("\n") };
   }
 
-  // Not ready
-  if (readiness.status === "not_ready") {
-    const subject = "Compliance alert: audit readiness is blocked";
-    lines.push("Missing controls (no evidence):");
+  // Fail
+  if (readiness.status === "fail") {
+    const subject = "Compliance alert: you will fail an audit";
+    lines.push("Missing controls (will cause audit failure):");
     for (const c of readiness.blockingControls) {
       lines.push(`  - ${c.framework} ${c.code} — ${c.name}`);
     }
-    if (readiness.staleControls.length > 0) {
-      lines.push("", "Stale controls:");
-      for (const c of readiness.staleControls) {
-        const maxAge = getMaxAgeDays(c.code);
-        lines.push(
-          `  - ${c.framework} ${c.code} — last updated ${c.ageDays}d ago (required every ${maxAge}d)`,
-        );
-      }
-    }
-    if (readiness.nextSteps.length > 0) {
-      lines.push("", "Next steps:");
-      for (const s of readiness.nextSteps) {
-        lines.push(`  - ${s}`);
+    if (readiness.fixPlan.length > 0) {
+      lines.push("", "Fix plan:");
+      for (const item of readiness.fixPlan) {
+        lines.push(`  - ${item.control}: ${item.title}`);
       }
     }
     lines.push("", `Visit dashboard: ${APP_URL}/dashboard`);
@@ -126,23 +117,23 @@ function buildEmail(
   // At risk (stale only)
   if (readiness.status === "at_risk") {
     const subject = "Compliance alert: evidence is out of date";
-    lines.push("Stale controls:");
+    lines.push("Stale controls (may fail audit):");
     for (const c of readiness.staleControls) {
       const maxAge = getMaxAgeDays(c.code);
       lines.push(
         `  - ${c.framework} ${c.code} — last updated ${c.ageDays}d ago (required every ${maxAge}d)`,
       );
     }
-    if (readiness.nextSteps.length > 0) {
-      lines.push("", "Next steps:");
-      for (const s of readiness.nextSteps) {
-        lines.push(`  - ${s}`);
+    if (readiness.fixPlan.length > 0) {
+      lines.push("", "Fix plan:");
+      for (const item of readiness.fixPlan) {
+        lines.push(`  - ${item.control}: ${item.title}`);
       }
     }
     lines.push("", `Visit dashboard: ${APP_URL}/dashboard`);
     return { subject, body: lines.join("\n") };
   }
 
-  // Ready — no notification needed
+  // Pass — no notification needed
   return { subject: "", body: "" };
 }

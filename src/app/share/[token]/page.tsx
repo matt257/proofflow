@@ -86,25 +86,25 @@ export default async function SharePage({
 // ---------------------------------------------------------------------------
 
 const READINESS_STYLES: Record<string, { border: string; bg: string; dot: string; title: string; titleColor: string }> = {
-  ready: {
+  pass: {
     border: "border-green-200 dark:border-green-900/30",
     bg: "bg-green-50 dark:bg-green-900/10",
     dot: "bg-green-500",
-    title: "Audit Ready",
+    title: "PASS — Audit-ready",
     titleColor: "text-green-700 dark:text-green-400",
   },
   at_risk: {
     border: "border-yellow-300 dark:border-yellow-900/30",
     bg: "bg-yellow-50 dark:bg-yellow-900/10",
     dot: "bg-yellow-500",
-    title: "At Risk",
+    title: "AT RISK — May fail audit",
     titleColor: "text-yellow-700 dark:text-yellow-400",
   },
-  not_ready: {
+  fail: {
     border: "border-red-200 dark:border-red-900/30",
     bg: "bg-red-50 dark:bg-red-900/10",
     dot: "bg-red-500",
-    title: "Not Audit Ready",
+    title: "FAIL — Not audit-ready",
     titleColor: "text-red-700 dark:text-red-400",
   },
 };
