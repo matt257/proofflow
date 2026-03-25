@@ -332,15 +332,23 @@ export default async function Dashboard() {
 
       {!schemaReady ? (
         <SchemaNotReady />
-      ) : !integration ? (
-        <ConnectGitHub />
       ) : (
         <>
-          <GitHubStatus meta={meta} />
+          <OnboardingBanner
+            hasIntegration={!!integration}
+            hasEvidence={!!latestOrgSnapshot}
+            hasCoverage={!!coverage && coverage.summary.covered > 0}
+          />
 
-          {coverage && (
-            <AuditReadinessBanner readiness={computeAuditReadiness(coverage)} />
-          )}
+          {!integration ? (
+            <ConnectGitHub />
+          ) : (
+            <>
+              <GitHubStatus meta={meta} />
+
+              {coverage && (
+                <AuditReadinessBanner readiness={computeAuditReadiness(coverage)} />
+              )}
 
           {coverage && <CoverageSection coverage={coverage} />}
 
@@ -550,6 +558,8 @@ export default async function Dashboard() {
               )}
             </div>
           </section>
+            </>
+          )}
         </>
       )}
     </main>
@@ -614,6 +624,98 @@ function normalizeSnapshotData(data: Record<string, unknown>) {
 // ---------------------------------------------------------------------------
 // Components
 // ---------------------------------------------------------------------------
+
+function OnboardingBanner({
+  hasIntegration,
+  hasEvidence,
+  hasCoverage,
+}: {
+  hasIntegration: boolean;
+  hasEvidence: boolean;
+  hasCoverage: boolean;
+}) {
+  const steps = [
+    { label: "Connect GitHub", done: hasIntegration },
+    { label: "Run your first access review", done: hasEvidence },
+    { label: "See your compliance status", done: hasCoverage },
+  ];
+
+  const completed = steps.filter((s) => s.done).length;
+  const allDone = completed === steps.length;
+
+  if (allDone) return null;
+
+  const pct = Math.round((completed / steps.length) * 100);
+
+  return (
+    <div className="rounded-lg border border-blue-200 bg-blue-50 p-5 dark:border-blue-900/30 dark:bg-blue-900/10">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-bold text-blue-800 dark:text-blue-300">
+          Get started with ProofFlow
+        </h2>
+        <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
+          {completed}/{steps.length}
+        </span>
+      </div>
+
+      {/* Progress bar */}
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-blue-200 dark:bg-blue-900/40">
+        <div
+          className="h-full rounded-full bg-blue-500 transition-all"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+
+      <div className="mt-4 space-y-3">
+        {steps.map((step, i) => (
+          <div key={i} className="flex items-center gap-3">
+            {step.done ? (
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white">
+                &#10003;
+              </span>
+            ) : (
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-blue-300 text-xs font-bold text-blue-400 dark:border-blue-700 dark:text-blue-600">
+                {i + 1}
+              </span>
+            )}
+            <span className={`text-sm ${step.done ? "text-blue-400 line-through dark:text-blue-600" : "font-medium text-blue-800 dark:text-blue-300"}`}>
+              {step.label}
+            </span>
+            {!step.done && i === completed && (
+              <OnboardingAction step={i} />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function OnboardingAction({ step }: { step: number }) {
+  if (step === 0) {
+    return (
+      <a
+        href="/api/github/connect"
+        className="ml-auto rounded bg-blue-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-blue-700"
+      >
+        Connect
+      </a>
+    );
+  }
+  if (step === 1) {
+    return (
+      <form action="/api/evidence/github-org-access-review/collect" method="POST" className="ml-auto">
+        <button
+          type="submit"
+          className="rounded bg-blue-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-blue-700"
+        >
+          Run now
+        </button>
+      </form>
+    );
+  }
+  return null;
+}
 
 function UpgradeCTA({ feature, description }: { feature: string; description?: string }) {
   return (
