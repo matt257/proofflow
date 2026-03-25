@@ -20,6 +20,10 @@ import {
   getControlGuidance,
   getNextActions,
 } from "@/lib/control-guidance";
+import {
+  computeAuditReadiness,
+  type AuditReadiness,
+} from "@/lib/audit-readiness";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { RunSchedulesButton } from "./run-schedules-button";
@@ -278,6 +282,10 @@ export default async function Dashboard() {
       ) : (
         <>
           <GitHubStatus meta={meta} />
+
+          {coverage && (
+            <AuditReadinessBanner readiness={computeAuditReadiness(coverage)} />
+          )}
 
           {coverage && <CoverageSection coverage={coverage} />}
 
@@ -776,6 +784,71 @@ function MissingCard({ control: c }: { control: ControlStatus }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+const READINESS_STYLES: Record<string, { border: string; bg: string; dot: string; title: string; titleColor: string }> = {
+  ready: {
+    border: "border-green-200 dark:border-green-900/30",
+    bg: "bg-green-50 dark:bg-green-900/10",
+    dot: "bg-green-500",
+    title: "Audit Ready",
+    titleColor: "text-green-700 dark:text-green-400",
+  },
+  at_risk: {
+    border: "border-yellow-300 dark:border-yellow-900/30",
+    bg: "bg-yellow-50 dark:bg-yellow-900/10",
+    dot: "bg-yellow-500",
+    title: "At Risk",
+    titleColor: "text-yellow-700 dark:text-yellow-400",
+  },
+  not_ready: {
+    border: "border-red-200 dark:border-red-900/30",
+    bg: "bg-red-50 dark:bg-red-900/10",
+    dot: "bg-red-500",
+    title: "Not Audit Ready",
+    titleColor: "text-red-700 dark:text-red-400",
+  },
+};
+
+function AuditReadinessBanner({ readiness }: { readiness: AuditReadiness }) {
+  const style = READINESS_STYLES[readiness.status]!;
+  const blockingCodes = readiness.blockingControls.map((c) => `${c.framework} ${c.code}`);
+  const staleCodes = readiness.staleControls.map((c) => `${c.framework} ${c.code}`);
+
+  return (
+    <div className={`rounded-lg border ${style.border} ${style.bg} p-5`}>
+      <div className="flex items-center gap-3">
+        <span className={`inline-block h-3 w-3 rounded-full ${style.dot}`} />
+        <h2 className={`text-lg font-bold ${style.titleColor}`}>{style.title}</h2>
+      </div>
+      <p className="mt-1.5 text-sm text-foreground/60">{readiness.summary}</p>
+
+      {blockingCodes.length > 0 && (
+        <div className="mt-3">
+          <p className="text-xs font-semibold text-foreground/50">Blocking controls (no evidence):</p>
+          <p className="text-xs text-foreground/40">{blockingCodes.join(", ")}</p>
+        </div>
+      )}
+
+      {staleCodes.length > 0 && (
+        <div className="mt-2">
+          <p className="text-xs font-semibold text-foreground/50">Stale controls (evidence expired):</p>
+          <p className="text-xs text-foreground/40">{staleCodes.join(", ")}</p>
+        </div>
+      )}
+
+      {readiness.nextSteps.length > 0 && (
+        <div className="mt-3">
+          <p className="text-xs font-semibold text-foreground/50">Next steps:</p>
+          <ul className="mt-1 list-disc pl-4 text-xs text-foreground/50 space-y-0.5">
+            {readiness.nextSteps.map((s, i) => (
+              <li key={i}>{s}</li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
